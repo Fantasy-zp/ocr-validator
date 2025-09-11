@@ -144,8 +144,8 @@ const loadPDF = async () => {
   error.value = ''
 
   try {
-    // 获取PDF文件
-    const pdfFile = ocrStore.getPDFFile(props.pdfName)
+    // 获取PDF文件 - 使用带缓存的方法
+    const pdfFile = await ocrStore.getPDFFileWithCache(props.pdfName)
     if (!pdfFile) {
       throw new Error(`找不到PDF文件: ${props.pdfName}`)
     }

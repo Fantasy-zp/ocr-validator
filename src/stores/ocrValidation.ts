@@ -26,6 +26,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // PDF相关状态
   const pdfFiles = ref<Map<string, File>>(new Map())
   const pdfDirectoryHandle = ref<FileSystemDirectoryHandle | null>(null)
+  // PDF文件缓存，用于优化性能
+  const pdfFileCache = ref<Map<string, {file: File, lastAccessed: number}>>(new Map())
+  const maxCacheSize = ref(50) // 限制缓存大小，可根据需要调整
 
   // 编辑历史状态
   const editHistory = ref<EditAction[]>([])
@@ -232,6 +235,74 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // ===== PDF文件管理 =====
 
   /**
+   * 获取PDF文件
+   */
+  function getPDFFile(pdfName: string): File | undefined {
+    const nameWithoutExt = pdfName.replace('.pdf', '')
+    return pdfFiles.value.get(nameWithoutExt)
+  }
+  
+  /**
+   * 获取PDF文件（带缓存机制）
+   */
+  async function getPDFFileWithCache(pdfName: string): Promise<File | undefined> {
+    const nameWithoutExt = pdfName.replace('.pdf', '')
+    
+    // 1. 检查缓存中是否存在
+    if (pdfFileCache.value.has(nameWithoutExt)) {
+      const cached = pdfFileCache.value.get(nameWithoutExt)!
+      cached.lastAccessed = Date.now() // 更新访问时间
+      return cached.file
+    }
+    
+    // 2. 检查原始存储中是否存在
+    if (pdfFiles.value.has(nameWithoutExt)) {
+      const file = pdfFiles.value.get(nameWithoutExt)! 
+      // 添加到缓存
+      addToCache(nameWithoutExt, file)
+      return file
+    }
+    
+    // 3. 如果有目录句柄，按需加载文件
+    if (pdfDirectoryHandle.value) {
+      try {
+        const entry = await pdfDirectoryHandle.value.getFileHandle(`${nameWithoutExt}.pdf`)
+        const file = await entry.getFile()
+        
+        // 添加到缓存
+        addToCache(nameWithoutExt, file)
+        
+        return file
+      } catch (error) {
+        console.error(`无法加载PDF文件: ${pdfName}`, error)
+        return undefined
+      }
+    }
+    
+    return undefined
+  }
+  
+  /**
+   * 添加文件到缓存，管理缓存大小
+   */
+  function addToCache(nameWithoutExt: string, file: File) {
+    // 如果缓存已满，删除最久未访问的文件
+    if (pdfFileCache.value.size >= maxCacheSize.value) {
+      const oldest = Array.from(pdfFileCache.value.entries())
+        .sort(([,a], [,b]) => a.lastAccessed - b.lastAccessed)[0]
+      if (oldest) {
+        pdfFileCache.value.delete(oldest[0])
+      }
+    }
+    
+    // 存入缓存
+    pdfFileCache.value.set(nameWithoutExt, {
+      file,
+      lastAccessed: Date.now()
+    })
+  }
+
+  /**
    * 选择PDF文件夹
    */
   async function selectPDFFolder(): Promise<number> {
@@ -267,14 +338,6 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       }
     }
     return pdfFiles.value.size
-  }
-
-  /**
-   * 获取PDF文件
-   */
-  function getPDFFile(pdfName: string): File | undefined {
-    const nameWithoutExt = pdfName.replace('.pdf', '')
-    return pdfFiles.value.get(nameWithoutExt)
   }
 
   /**
@@ -633,6 +696,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     editHistory,
     historyIndex,
     modifiedSamples,
+    pdfFileCache,
     
     // 计算属性
     currentSample,
@@ -660,6 +724,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     selectPDFFolder,
     uploadPDFFiles,
     getPDFFile,
+    getPDFFileWithCache,
     removePDFFile,
     
     // 编辑历史
