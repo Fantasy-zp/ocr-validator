@@ -18,6 +18,8 @@ export interface OCRSample {
   pdf_name: string
   layout_dets: LayoutElement[]
   page_info: PageInfo
+  original_layout_dets?: LayoutElement[]
+  original_page_info?: PageInfo
 }
 
 // 布局元素类型

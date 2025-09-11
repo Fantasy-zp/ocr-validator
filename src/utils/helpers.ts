@@ -337,13 +337,47 @@ export class DataUtils {
   }
 
   /**
-   * 检查样本是否被修改
+   * 检查样本是否被修改（合并校验）
    */
   static isSampleModified(sample: Sample): boolean {
     if (!sample.original_pairs) return false
     const current = JSON.stringify(sample.merging_idx_pairs.sort())
     const original = JSON.stringify(sample.original_pairs.sort())
     return current !== original
+  }
+  
+  /**
+   * 检查OCR样本是否被修改
+   */
+  static isOCRSampleModified(sample: OCRSample): boolean {
+    // 如果没有原始数据，假设没有修改
+    if (!sample.original_layout_dets || !sample.original_page_info) return false
+    
+    // 比较页面信息
+    const currentPageInfo = JSON.stringify(sample.page_info)
+    const originalPageInfo = JSON.stringify(sample.original_page_info)
+    if (currentPageInfo !== originalPageInfo) return true
+    
+    // 比较布局元素（排序后比较）
+    const currentDets = [...sample.layout_dets].sort((a, b) => a.order - b.order)
+    const originalDets = [...sample.original_layout_dets].sort((a, b) => a.order - b.order)
+    
+    if (currentDets.length !== originalDets.length) return true
+    
+    // 比较每个元素
+    for (let i = 0; i < currentDets.length; i++) {
+      const current = currentDets[i]
+      const original = originalDets[i]
+      
+      // 比较关键属性
+      if (current.category_type !== original.category_type ||
+          current.text !== original.text ||
+          !this.arraysEqual(current.poly, original.poly)) {
+        return true
+      }
+    }
+    
+    return false
   }
 }
 

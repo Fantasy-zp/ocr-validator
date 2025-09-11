@@ -76,7 +76,12 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     const result = JSONLParser.parseOCRJSONL(text)
 
     if (result.success) {
-      samples.value = result.samples
+      // 为每个样本保存原始数据
+      samples.value = result.samples.map(sample => ({
+        ...sample,
+        original_layout_dets: DataUtils.deepClone(sample.layout_dets),
+        original_page_info: DataUtils.deepClone(sample.page_info)
+      }))
       currentIndex.value = 0
       selectedElementIndex.value = null
       modifiedSamples.value.clear()
@@ -89,14 +94,131 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       errors: result.errors
     }
   }
+  
+  /**
+   * 重置当前样本到原始状态
+   */
+  function resetCurrentSample() {
+    if (!currentSample.value) return
 
+    const originalLayoutDets = DataUtils.deepClone(currentSample.value.original_layout_dets || [])
+    const originalPageInfo = DataUtils.deepClone(currentSample.value.original_page_info || { 
+      language: 'zh', 
+      fuzzy_scan: false, 
+      watermark: false, 
+      rotate: 'normal',
+      is_table: false,
+      is_diagram: false
+    })
+
+    // 记录编辑历史
+    addToHistory({
+      type: 'reorder',
+      oldValue: DataUtils.deepClone(currentSample.value.layout_dets),
+      newValue: originalLayoutDets,
+      timestamp: Date.now()
+    })
+
+    // 更新页面信息的编辑历史
+    addToHistory({
+      type: 'modify',
+      elementIndex: -1, // 特殊索引表示页面信息
+      oldValue: DataUtils.deepClone(currentSample.value.page_info),
+      newValue: originalPageInfo,
+      timestamp: Date.now()
+    })
+
+    // 恢复原始数据
+    currentSample.value.layout_dets = originalLayoutDets
+    currentSample.value.page_info = originalPageInfo
+    
+    // 重新计算修改状态
+    updateModificationStatus(currentIndex.value)
+  }
+  
+  /**
+   * 重新计算修改状态
+   */
+  function recalculateModifications() {
+    modifiedSamples.value.clear()
+    
+    // 对每个样本检查是否被修改
+    samples.value.forEach((sample, index) => {
+      if (DataUtils.isOCRSampleModified(sample)) {
+        modifiedSamples.value.add(index)
+      }
+    })
+  }
+  
+  /**
+   * 更新单个样本的修改状态
+   */
+  function updateModificationStatus(index: number) {
+    const sample = samples.value[index]
+    if (!sample) return
+    
+    if (DataUtils.isOCRSampleModified(sample)) {
+      modifiedSamples.value.add(index)
+    } else {
+      modifiedSamples.value.delete(index)
+    }
+  }
+
+  /**
+   * 撤销操作
+   */
+  function undo() {
+    if (!canUndo.value || !currentSample.value) return false
+
+    const action = editHistory.value[historyIndex.value]
+    historyIndex.value--
+
+    try {
+      executeHistoryAction(action, 'undo')
+      // 更新修改状态
+      updateModificationStatus(currentIndex.value)
+      return true
+    } catch (error) {
+      console.error('撤销操作失败:', error)
+      historyIndex.value++ // 恢复索引
+      return false
+    }
+  }
+
+  /**
+   * 重做操作
+   */
+  function redo() {
+    if (!canRedo.value || !currentSample.value) return false
+
+    historyIndex.value++
+    const action = editHistory.value[historyIndex.value]
+
+    try {
+      executeHistoryAction(action, 'redo')
+      // 更新修改状态
+      updateModificationStatus(currentIndex.value)
+      return true
+    } catch (error) {
+      console.error('重做操作失败:', error)
+      historyIndex.value-- // 恢复索引
+      return false
+    }
+  }
+  
   /**
    * 直接设置样本数据
    */
   function setSamples(newSamples: OCRSample[], index = 0) {
-    samples.value = newSamples
+    // 为每个样本保存原始数据
+    samples.value = newSamples.map(sample => ({
+      ...sample,
+      original_layout_dets: DataUtils.deepClone(sample.layout_dets),
+      original_page_info: DataUtils.deepClone(sample.page_info)
+    }))
     currentIndex.value = Math.min(index, newSamples.length - 1)
     selectedElementIndex.value = null
+    // 重新计算所有样本的修改状态
     recalculateModifications()
   }
 
@@ -310,44 +432,6 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     if (editHistory.value.length > maxHistorySize.value) {
       editHistory.value.shift()
       historyIndex.value--
-    }
-  }
-
-  /**
-   * 撤销操作
-   */
-  function undo() {
-    if (!canUndo.value || !currentSample.value) return false
-
-    const action = editHistory.value[historyIndex.value]
-    historyIndex.value--
-
-    try {
-      executeHistoryAction(action, 'undo')
-      return true
-    } catch (error) {
-      console.error('撤销操作失败:', error)
-      historyIndex.value++ // 恢复索引
-      return false
-    }
-  }
-
-  /**
-   * 重做操作
-   */
-  function redo() {
-    if (!canRedo.value || !currentSample.value) return false
-
-    historyIndex.value++
-    const action = editHistory.value[historyIndex.value]
-
-    try {
-      executeHistoryAction(action, 'redo')
-      return true
-    } catch (error) {
-      console.error('重做操作失败:', error)
-      historyIndex.value-- // 恢复索引
-      return false
     }
   }
 
@@ -572,6 +656,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     loadJSONL,
     setSamples,
     updatePageInfo,
+    resetCurrentSample,
 
     // PDF管理
     selectPDFFolder,
