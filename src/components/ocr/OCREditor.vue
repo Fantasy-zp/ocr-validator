@@ -188,7 +188,7 @@ import {
   Select
 } from '@element-plus/icons-vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
-import type { LayoutElement, ElementType } from '@/types/ocr'
+import type { LayoutElement, ElementType } from '@/types'
 
 const ocrStore = useOCRValidationStore()
 

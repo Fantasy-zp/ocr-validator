@@ -111,7 +111,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { Edit, Delete } from '@element-plus/icons-vue'
-import type { LayoutElement, OCRViewMode, ElementType } from '@/types/ocr'
+import type { LayoutElement, OCRViewMode, ElementType } from '@/types'
 
 const props = defineProps<{
   element: LayoutElement

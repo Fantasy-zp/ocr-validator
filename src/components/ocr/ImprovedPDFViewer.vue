@@ -70,7 +70,8 @@
 import { ref, computed, onMounted, onUnmounted, watch, markRaw } from 'vue'
 import { ZoomIn, ZoomOut, Loading } from '@element-plus/icons-vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
-import type { LayoutElement } from '@/types/ocr'
+import type { LayoutElement } from '@/types'
+import type { CSSProperties } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
 
 // 设置 worker
@@ -111,19 +112,19 @@ const pageWidth = ref(0)
 const pageHeight = ref(0)
 
 // 计算样式
-const canvasContainerStyle = computed(() => ({
+const canvasContainerStyle = computed<CSSProperties>(() => ({
   width: `${pageWidth.value * scale.value}px`,
   height: `${pageHeight.value * scale.value}px`,
-  position: 'relative'
+  position: 'relative' as const
 }))
 
-const overlayStyle = computed(() => ({
+const overlayStyle = computed<CSSProperties>(() => ({
   width: `${pageWidth.value * scale.value}px`,
   height: `${pageHeight.value * scale.value}px`,
-  position: 'absolute',
+  position: 'absolute' as const,
   top: 0,
   left: 0,
-  pointerEvents: 'all'
+  pointerEvents: 'all' as const
 }))
 
 // 获取边界框CSS类

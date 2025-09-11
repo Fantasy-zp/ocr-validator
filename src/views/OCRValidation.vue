@@ -63,6 +63,7 @@
             :elements="ocrStore.currentElements"
             :view-mode="ocrStore.viewMode"
             :selected-index="ocrStore.selectedElementIndex"
+            :page-info="ocrStore.currentSample?.page_info || null"
             @update:view-mode="ocrStore.setViewMode"
             @element-click="ocrStore.selectElement"
             @element-edit="handleElementEdit"

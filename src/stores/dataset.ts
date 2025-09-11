@@ -79,10 +79,9 @@ export const useDatasetStore = defineStore('dataset', () => {
     currentSample.value.merging_idx_pairs = pairs
 
     // 检查是否真的发生了修改
-    const isReallyModified = !DataUtils.arraysEqual(
-      JSON.stringify(pairs.sort()),
-      JSON.stringify(currentSample.value.original_pairs?.sort() || [])
-    )
+    const currentPairs = JSON.stringify(pairs.sort());
+    const originalPairs = JSON.stringify(currentSample.value.original_pairs?.sort() || []);
+    const isReallyModified = currentPairs !== originalPairs;
 
     if (isReallyModified) {
       modifiedIndices.value.add(currentIndex.value)
@@ -102,10 +101,9 @@ export const useDatasetStore = defineStore('dataset', () => {
       if (samples.value[index]) {
         samples.value[index].merging_idx_pairs = pairs
 
-        const isModified = !DataUtils.arraysEqual(
-          JSON.stringify(pairs.sort()),
-          JSON.stringify(samples.value[index].original_pairs?.sort() || [])
-        )
+        const currentPairs = JSON.stringify(pairs.sort());
+        const originalPairs = JSON.stringify(samples.value[index].original_pairs?.sort() || []);
+        const isModified = currentPairs !== originalPairs;
 
         if (isModified) {
           modifiedIndices.value.add(index)

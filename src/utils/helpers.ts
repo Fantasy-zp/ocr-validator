@@ -5,9 +5,11 @@ import type {
   Sample,
   OCRSample,
   LoadResult,
-  ValidationError,
-  FileProcessingError,
   ElementType
+} from '@/types'
+import {
+  ValidationError,
+  FileProcessingError
 } from '@/types'
 
 // 文件处理相关
@@ -273,10 +275,10 @@ export class UIUtils {
     func: T,
     wait: number
   ): (...args: Parameters<T>) => void {
-    let timeout: NodeJS.Timeout | null = null
+    let timeout: number | null = null
     return (...args: Parameters<T>) => {
       if (timeout) clearTimeout(timeout)
-      timeout = setTimeout(() => func(...args), wait)
+      timeout = window.setTimeout(() => func(...args), wait)
     }
   }
 

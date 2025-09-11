@@ -44,7 +44,7 @@ export interface PageInfo {
   language: 'zh' | 'en'
   fuzzy_scan: boolean
   watermark: boolean
-  rotate: 'normal' | '90' | '180' | '270'
+  rotate: 'normal' | 'rotate90' | 'rotate180' | 'rotate270'
   is_table: boolean
   is_diagram: boolean
 }
@@ -68,8 +68,8 @@ export type MergingPair = [number, number]
 export interface EditAction {
   type: 'modify' | 'delete' | 'add' | 'reorder'
   elementIndex?: number
-  oldValue?: LayoutElement | LayoutElement[]
-  newValue?: LayoutElement | LayoutElement[]
+  oldValue?: LayoutElement | LayoutElement[] | PageInfo
+  newValue?: LayoutElement | LayoutElement[] | PageInfo
   timestamp: number
 }
 

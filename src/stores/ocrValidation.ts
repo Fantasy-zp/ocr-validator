@@ -11,7 +11,8 @@ import type {
   EditAction,
   LoadResult,
   OCRStoreState,
-  OCRViewMode
+  OCRViewMode,
+  PageInfo
 } from '@/types'
 import { JSONLParser, DataUtils } from '@/utils/helpers'
 
@@ -215,22 +216,33 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
    * 删除元素
    */
   function deleteElement(index: number) {
-    if (!currentSample.value || index < 0 || index >= currentSample.value.layout_dets.length) {
+    if (!currentSample.value || index < 0 || index >= currentElements.value.length) {
       return false
     }
 
-    const oldElement = currentSample.value.layout_dets[index]
+    // 获取排序后索引对应的原始元素
+    const elementToDelete = currentElements.value[index]
+    // 找到该元素在原始数组中的位置
+    const originalIndex = currentSample.value.layout_dets.findIndex(el => 
+      el === elementToDelete || (el.order === elementToDelete.order && el.text === elementToDelete.text)
+    )
+
+    if (originalIndex === -1) {
+      return false
+    }
+
+    const oldElement = currentSample.value.layout_dets[originalIndex]
 
     // 记录编辑历史
     addToHistory({
       type: 'delete',
-      elementIndex: index,
+      elementIndex: originalIndex,
       oldValue: oldElement,
       timestamp: Date.now()
     })
 
     // 删除元素
-    currentSample.value.layout_dets.splice(index, 1)
+    currentSample.value.layout_dets.splice(originalIndex, 1)
     modifiedSamples.value.add(currentIndex.value)
 
     // 更新选中状态
@@ -347,10 +359,17 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
     switch (action.type) {
       case 'modify':
-        if (action.elementIndex !== undefined) {
+        if (action.elementIndex !== undefined && action.elementIndex >= 0) {
+          // 处理元素修改
           const targetElement = direction === 'undo' ? action.oldValue : action.newValue
-          if (targetElement && !Array.isArray(targetElement)) {
+          if (targetElement && !Array.isArray(targetElement) && 'category_type' in targetElement) {
             currentSample.value.layout_dets[action.elementIndex] = targetElement
+          }
+        } else if (action.elementIndex === -1) {
+          // 处理页面信息修改
+          const targetPageInfo = direction === 'undo' ? action.oldValue : action.newValue
+          if (targetPageInfo && !Array.isArray(targetPageInfo) && 'language' in targetPageInfo) {
+            currentSample.value.page_info = targetPageInfo
           }
         }
         break
@@ -358,9 +377,10 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       case 'add':
         if (direction === 'undo') {
           // 撤销添加 = 删除元素
-          if (action.newValue && !Array.isArray(action.newValue)) {
+          if (action.newValue && !Array.isArray(action.newValue) && 'category_type' in action.newValue) {
+            const layoutElement = action.newValue
             const index = currentSample.value.layout_dets.findIndex(
-              elem => elem.order === action.newValue?.order
+              elem => elem.order === layoutElement.order && elem.text === layoutElement.text
             )
             if (index !== -1) {
               currentSample.value.layout_dets.splice(index, 1)
@@ -368,14 +388,14 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
           }
         } else {
           // 重做添加 = 重新添加元素
-          if (action.newValue && !Array.isArray(action.newValue)) {
+          if (action.newValue && !Array.isArray(action.newValue) && 'category_type' in action.newValue) {
             currentSample.value.layout_dets.push(action.newValue)
           }
         }
         break
 
       case 'delete':
-        if (action.elementIndex !== undefined && action.oldValue && !Array.isArray(action.oldValue)) {
+        if (action.elementIndex !== undefined && action.oldValue && !Array.isArray(action.oldValue) && 'category_type' in action.oldValue) {
           if (direction === 'undo') {
             // 撤销删除 = 重新插入元素
             currentSample.value.layout_dets.splice(action.elementIndex, 0, action.oldValue)
@@ -387,9 +407,12 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         break
 
       case 'reorder':
-        const targetElements = direction === 'undo' ? action.oldValue : action.newValue
-        if (targetElements && Array.isArray(targetElements)) {
-          currentSample.value.layout_dets = DataUtils.deepClone(targetElements)
+        if (direction === 'undo' && action.oldValue && Array.isArray(action.oldValue)) {
+          // 撤销重排 = 恢复旧顺序
+          currentSample.value.layout_dets = action.oldValue
+        } else if (direction === 'redo' && action.newValue && Array.isArray(action.newValue)) {
+          // 重做重排 = 应用新顺序
+          currentSample.value.layout_dets = action.newValue
         }
         break
     }
@@ -444,6 +467,31 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   }
 
   // ===== 数据操作 =====
+
+  /**
+   * 更新页面信息
+   */
+  function updatePageInfo(updates: Partial<PageInfo>) {
+    if (!currentSample.value) return false
+
+    const oldPageInfo = DataUtils.deepClone(currentSample.value.page_info)
+    const newPageInfo = { ...oldPageInfo, ...updates }
+
+    // 记录编辑历史
+    addToHistory({
+      type: 'modify',
+      elementIndex: -1, // 特殊索引表示页面信息
+      oldValue: oldPageInfo,
+      newValue: newPageInfo,
+      timestamp: Date.now()
+    })
+
+    // 更新页面信息
+    currentSample.value.page_info = newPageInfo
+    modifiedSamples.value.add(currentIndex.value)
+
+    return true
+  }
 
   /**
    * 导出数据
@@ -523,6 +571,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     // 核心操作
     loadJSONL,
     setSamples,
+    updatePageInfo,
 
     // PDF管理
     selectPDFFolder,
