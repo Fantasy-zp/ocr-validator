@@ -103,10 +103,10 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
     const originalLayoutDets = DataUtils.deepClone(currentSample.value.original_layout_dets || [])
     const originalPageInfo = DataUtils.deepClone(currentSample.value.original_page_info || { 
-      language: 'zh', 
+      language: 'zh' as 'zh' | 'en', 
       fuzzy_scan: false, 
       watermark: false, 
-      rotate: 'normal',
+      rotate: 'normal' as 'normal' | 'rotate90' | 'rotate180' | 'rotate270',
       is_table: false,
       is_diagram: false
     })
@@ -162,6 +162,13 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     } else {
       modifiedSamples.value.delete(index)
     }
+  }
+  
+  /**
+   * 重置所有修改状态标记
+   */
+  function resetModificationStatus() {
+    modifiedSamples.value.clear()
   }
 
   /**
@@ -585,19 +592,6 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   }
 
   /**
-   * 重新计算修改状态
-   */
-  function recalculateModifications() {
-    // OCR样本的修改状态基于编辑历史
-    // 这里可以根据具体需求实现
-    modifiedSamples.value.clear()
-    // 简单实现：如果有编辑历史就认为已修改
-    if (editHistory.value.length > 0) {
-      modifiedSamples.value.add(currentIndex.value)
-    }
-  }
-
-  /**
    * 获取存储状态快照
    */
   function getStateSnapshot(): OCRStoreState {
@@ -626,7 +620,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     historyIndex.value = snapshot.historyIndex
     modifiedSamples.value = snapshot.modifiedSamples
   }
-
+  
   // ===== 导出接口 =====
   return {
     // 状态
@@ -639,7 +633,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     editHistory,
     historyIndex,
     modifiedSamples,
-
+    
     // 计算属性
     currentSample,
     totalSamples,
@@ -651,43 +645,45 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     canRedo,
     selectedElement,
     pdfStats,
-
+    
     // 核心操作
     loadJSONL,
     setSamples,
-    updatePageInfo,
-    resetCurrentSample,
-
-    // PDF管理
-    selectPDFFolder,
-    uploadPDFFiles,
-    getPDFFile,
-    removePDFFile,
-
-    // 元素操作
     updateElement,
     addElement,
     deleteElement,
     reorderElements,
-
-    // 历史操作
+    updatePageInfo,
+    resetCurrentSample,
+    
+    // PDF文件管理
+    selectPDFFolder,
+    uploadPDFFiles,
+    getPDFFile,
+    removePDFFile,
+    
+    // 编辑历史
+    addToHistory,
+    executeHistoryAction,
     undo,
     redo,
     clearHistory,
-
+    
     // 导航操作
     navigateTo,
     nextSample,
     prevSample,
-
+    
     // 选择操作
     selectElement,
     setViewMode,
-
+    
     // 数据操作
     exportData,
+    resetModificationStatus,
     recalculateModifications,
     getStateSnapshot,
-    restoreFromSnapshot
+    restoreFromSnapshot,
+    updateModificationStatus
   }
 })
