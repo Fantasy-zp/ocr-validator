@@ -1,0 +1,410 @@
+/*
+通用工具函数库
+*/
+import type {
+  Sample,
+  OCRSample,
+  LoadResult,
+  ValidationError,
+  FileProcessingError,
+  ElementType
+} from '@/types'
+
+// 文件处理相关
+export class FileUtils {
+  /**
+   * 读取文件内容为文本
+   */
+  static async readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result
+        if (typeof result === 'string') {
+          resolve(result)
+        } else {
+          reject(new FileProcessingError('文件读取结果格式错误', file.name))
+        }
+      }
+      reader.onerror = () => {
+        reject(new FileProcessingError('文件读取失败', file.name))
+      }
+      reader.readAsText(file, 'utf-8')
+    })
+  }
+
+  /**
+   * 检测文件类型
+   */
+  static detectFileType(content: string): 'merge' | 'ocr' | 'unknown' {
+    try {
+      const lines = content.trim().split('\n').filter(line => line.trim())
+      if (lines.length === 0) return 'unknown'
+
+      const firstSample = JSON.parse(lines[0])
+
+      // 检查合并校验格式
+      if (firstSample.pdf_name_1 && firstSample.pdf_name_2 &&
+          Array.isArray(firstSample.merging_idx_pairs)) {
+        return 'merge'
+      }
+
+      // 检查OCR校验格式
+      if (firstSample.pdf_name && Array.isArray(firstSample.layout_dets)) {
+        return 'ocr'
+      }
+
+      return 'unknown'
+    } catch {
+      return 'unknown'
+    }
+  }
+
+  /**
+   * 生成下载链接
+   */
+  static downloadFile(content: string, fileName: string, mimeType = 'application/jsonl') {
+    const blob = new Blob([content], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+// JSONL解析相关
+export class JSONLParser {
+  /**
+   * 解析合并校验JSONL
+   */
+  static parseMergeJSONL(text: string): LoadResult & { samples: Sample[] } {
+    const lines = text.trim().split('\n').filter(line => line.trim())
+    const samples: Sample[] = []
+    const errors: Array<{line: number; error: Error}> = []
+
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const sample = JSON.parse(lines[i]) as Sample
+
+        // 验证必要字段
+        if (!this.validateMergeSample(sample)) {
+          throw new ValidationError('样本格式不正确', i + 1)
+        }
+
+        // 确保 merging_idx_pairs 是数组
+        if (!Array.isArray(sample.merging_idx_pairs)) {
+          sample.merging_idx_pairs = []
+        }
+
+        // 保存原始合并对
+        sample.original_pairs = JSON.parse(JSON.stringify(sample.merging_idx_pairs))
+        samples.push(sample)
+
+      } catch (e) {
+        errors.push({ line: i + 1, error: e as Error })
+      }
+    }
+
+    return {
+      success: samples.length > 0,
+      count: samples.length,
+      errors,
+      samples
+    }
+  }
+
+  /**
+   * 解析OCR校验JSONL
+   */
+  static parseOCRJSONL(text: string): LoadResult & { samples: OCRSample[] } {
+    const lines = text.trim().split('\n').filter(line => line.trim())
+    const samples: OCRSample[] = []
+    const errors: Array<{line: number; error: Error}> = []
+
+    for (let i = 0; i < lines.length; i++) {
+      try {
+        const sample = JSON.parse(lines[i]) as OCRSample
+
+        // 验证必要字段
+        if (!this.validateOCRSample(sample)) {
+          throw new ValidationError('OCR样本格式不正确', i + 1)
+        }
+
+        samples.push(sample)
+
+      } catch (e) {
+        errors.push({ line: i + 1, error: e as Error })
+      }
+    }
+
+    return {
+      success: samples.length > 0,
+      count: samples.length,
+      errors,
+      samples
+    }
+  }
+
+  /**
+   * 验证合并样本格式
+   */
+  private static validateMergeSample(sample: any): sample is Sample {
+    return !!(
+      sample &&
+      typeof sample.pdf_name_1 === 'string' &&
+      typeof sample.pdf_name_2 === 'string' &&
+      ['zh', 'en'].includes(sample.language) &&
+      Array.isArray(sample.md_elem_list_1) &&
+      Array.isArray(sample.md_elem_list_2)
+    )
+  }
+
+  /**
+   * 验证OCR样本格式
+   */
+  private static validateOCRSample(sample: any): sample is OCRSample {
+    return !!(
+      sample &&
+      typeof sample.pdf_name === 'string' &&
+      Array.isArray(sample.layout_dets) &&
+      sample.page_info &&
+      typeof sample.page_info === 'object'
+    )
+  }
+
+  /**
+   * 导出合并样本到JSONL
+   */
+  static exportMergeToJSONL(samples: Sample[]): string {
+    return samples.map(sample => {
+      const exportSample = { ...sample }
+      delete exportSample.original_pairs
+      return this.stringifyWithSpace(exportSample)
+    }).join('\n')
+  }
+
+  /**
+   * 导出OCR样本到JSONL
+   */
+  static exportOCRToJSONL(samples: OCRSample[]): string {
+    return samples.map(sample => JSON.stringify(sample)).join('\n')
+  }
+
+  /**
+   * 自定义序列化函数，确保合并对格式正确
+   */
+  private static stringifyWithSpace(obj: unknown): string {
+    if (Array.isArray(obj)) {
+      if (obj.length === 2 && typeof obj[0] === 'number' && typeof obj[1] === 'number') {
+        return `[${obj[0]}, ${obj[1]}]`
+      }
+      return `[${obj.map(item => this.stringifyWithSpace(item)).join(', ')}]`
+    } else if (typeof obj === 'object' && obj !== null) {
+      const keys = Object.keys(obj)
+      const keyValuePairs = keys.map(key =>
+        `"${key}":${this.stringifyWithSpace((obj as Record<string, unknown>)[key])}`
+      )
+      return `{${keyValuePairs.join(', ')}}`
+    } else if (typeof obj === 'string') {
+      return JSON.stringify(obj)
+    } else {
+      return String(obj)
+    }
+  }
+}
+
+// UI相关工具
+export class UIUtils {
+  /**
+   * 获取元素类型对应的颜色
+   */
+  static getElementTypeColor(type: ElementType): string {
+    const colorMap: Record<ElementType, string> = {
+      text: '#409eff',
+      table: '#67c23a',
+      table_caption: '#e6a23c',
+      table_footnote: '#e6a23c',
+      title: '#f56c6c',
+      figure: '#909399',
+      formula: '#b88230'
+    }
+    return colorMap[type] || '#909399'
+  }
+
+  /**
+   * 获取Element Plus标签类型
+   */
+  static getElementTagType(type: ElementType): string {
+    const typeMap: Record<ElementType, string> = {
+      text: '',
+      table: 'success',
+      table_caption: 'warning',
+      table_footnote: 'warning',
+      title: 'danger',
+      figure: 'info',
+      formula: 'warning'
+    }
+    return typeMap[type] || ''
+  }
+
+  /**
+   * 格式化时间显示
+   */
+  static formatTimeAgo(date: Date): string {
+    const now = new Date()
+    const diff = now.getTime() - date.getTime()
+    const minutes = Math.floor(diff / (1000 * 60))
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+
+    if (minutes < 1) return '刚刚'
+    if (minutes < 60) return `${minutes}分钟前`
+    if (hours < 24) return `${hours}小时前`
+    if (days < 7) return `${days}天前`
+    return date.toLocaleDateString()
+  }
+
+  /**
+   * 防抖函数
+   */
+  static debounce<T extends (...args: any[]) => any>(
+    func: T,
+    wait: number
+  ): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout | null = null
+    return (...args: Parameters<T>) => {
+      if (timeout) clearTimeout(timeout)
+      timeout = setTimeout(() => func(...args), wait)
+    }
+  }
+
+  /**
+   * 节流函数
+   */
+  static throttle<T extends (...args: any[]) => any>(
+    func: T,
+    limit: number
+  ): (...args: Parameters<T>) => void {
+    let inThrottle = false
+    return (...args: Parameters<T>) => {
+      if (!inThrottle) {
+        func(...args)
+        inThrottle = true
+        setTimeout(() => inThrottle = false, limit)
+      }
+    }
+  }
+}
+
+// 数据处理工具
+export class DataUtils {
+  /**
+   * 深拷贝对象
+   */
+  static deepClone<T>(obj: T): T {
+    if (obj === null || typeof obj !== 'object') return obj
+    if (obj instanceof Date) return new Date(obj.getTime()) as unknown as T
+    if (obj instanceof Array) return obj.map(item => this.deepClone(item)) as unknown as T
+    if (typeof obj === 'object') {
+      const clonedObj = {} as T
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          clonedObj[key] = this.deepClone(obj[key])
+        }
+      }
+      return clonedObj
+    }
+    return obj
+  }
+
+  /**
+   * 检查两个数组是否相等
+   */
+  static arraysEqual<T>(a: T[], b: T[]): boolean {
+    if (a.length !== b.length) return false
+    return a.every((val, i) => val === b[i])
+  }
+
+  /**
+   * 生成唯一ID
+   */
+  static generateId(): string {
+    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  /**
+   * 检查样本是否被修改
+   */
+  static isSampleModified(sample: Sample): boolean {
+    if (!sample.original_pairs) return false
+    const current = JSON.stringify(sample.merging_idx_pairs.sort())
+    const original = JSON.stringify(sample.original_pairs.sort())
+    return current !== original
+  }
+}
+
+// 键盘快捷键管理
+export class KeyboardManager {
+  private handlers: Map<string, () => void> = new Map()
+  private isActive = true
+
+  constructor() {
+    this.handleKeydown = this.handleKeydown.bind(this)
+    document.addEventListener('keydown', this.handleKeydown)
+  }
+
+  /**
+   * 注册快捷键
+   */
+  register(key: string, handler: () => void): void {
+    this.handlers.set(key.toLowerCase(), handler)
+  }
+
+  /**
+   * 注销快捷键
+   */
+  unregister(key: string): void {
+    this.handlers.delete(key.toLowerCase())
+  }
+
+  /**
+   * 启用/禁用快捷键
+   */
+  setActive(active: boolean): void {
+    this.isActive = active
+  }
+
+  /**
+   * 处理键盘事件
+   */
+  private handleKeydown(event: KeyboardEvent): void {
+    if (!this.isActive) return
+
+    // 如果焦点在输入框上，忽略快捷键
+    if (document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement) {
+      return
+    }
+
+    const key = event.key.toLowerCase()
+    const handler = this.handlers.get(key)
+
+    if (handler) {
+      event.preventDefault()
+      handler()
+    }
+  }
+
+  /**
+   * 销毁管理器
+   */
+  destroy(): void {
+    document.removeEventListener('keydown', this.handleKeydown)
+    this.handlers.clear()
+  }
+}
+
+// 导出常用实例
+export const keyboardManager = new KeyboardManager()

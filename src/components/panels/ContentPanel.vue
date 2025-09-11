@@ -8,7 +8,7 @@
     <div class="panel-header">
       <el-radio-group
         :model-value="viewMode"
-        @update:model-value="$emit('update:view-mode', $event)"
+        @update:model-value="handleViewModeChange"
         size="small"
       >
         <el-radio-button label="rendered">渲染效果</el-radio-button>
@@ -39,9 +39,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { ViewMode } from '@/types'
 import { useDatasetStore } from '@/stores/dataset'
+import type { ViewMode } from '@/types'
 import ElementCard from './ElementCard.vue'
 
 const props = defineProps<{
@@ -60,6 +59,10 @@ const datasetStore = useDatasetStore()
 
 const handleElementClick = (index: number) => {
   emit('element-click', index)
+}
+
+const handleViewModeChange = (mode: ViewMode) => {
+  emit('update:view-mode', mode)
 }
 
 const checkConnected = (index: number) => {
