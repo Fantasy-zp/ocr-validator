@@ -3,12 +3,14 @@
     <router-view v-slot="{ Component }">
       <component :is="Component" v-if="Component" />
     </router-view>
+    <SpeedInsights />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { SpeedInsights } from "@vercel/speed-insights/vue"
 
 onMounted(() => {
   // 基本的错误处理
@@ -27,7 +29,7 @@ onMounted(() => {
   flex-direction: column;
   background-color: #f5f7fa;
   font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB",
-               "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
