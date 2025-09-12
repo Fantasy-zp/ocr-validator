@@ -38,12 +38,12 @@ export const useFileManagerStore = defineStore('fileManager', () => {
     if (samples.length === 0) {
       throw new Error('文件中没有有效数据')
     }
-    
+
     // 检查是否存在同名文件
-    const hasDuplicate = Array.from(files.value.values()).some(file => 
+    const hasDuplicate = Array.from(files.value.values()).some(file =>
       file.name === name
     )
-    
+
     if (hasDuplicate) {
       throw new Error('文件名已存在，请先重命名后再上传')
     }
@@ -188,7 +188,7 @@ export const useFileManagerStore = defineStore('fileManager', () => {
 
       // 恢复当前文件
       currentFileId.value = data.currentFileId
-      
+
       // 通知datasetStore加载当前文件数据
       // 这里通过返回值或其他机制让datasetStore知道要加载数据
     } catch (e) {

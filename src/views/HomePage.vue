@@ -137,42 +137,42 @@ const navigateTo = (path: string) => {
 
 // 快速上传处理
 const handleQuickUpload = async (file: File) => {
-    try {
-      const text = await file.text()
+  try {
+    const text = await file.text()
 
-      // 检查是否存在同名文件
-      const hasDuplicate = fileManagerStore.fileList.some(f => f.name === file.name) ||
-        (ocrStore.currentFileName && ocrStore.currentFileName === file.name)
-      if (hasDuplicate) {
-        ElMessage.warning('文件名已存在，请先重命名后再上传')
-        return false
-      }
-
-      // 尝试解析第一行来判断数据格式
-      const firstLine = text.trim().split('\n')[0]
-      const sample = JSON.parse(firstLine)
-
-      // 检查是否为合并校验格式 (Sample类型)
-      if (sample.pdf_name_1 && sample.pdf_name_2 && 'merging_idx_pairs' in sample) {
-        // 合并校验格式
-        fileManagerStore.addFile(file.name, text)
-        ElMessage.success('检测到合并校验数据，正在跳转...')
-        setTimeout(() => navigateTo('/merge-validation'), 1000)
-      } else if (sample.pdf_name && sample.layout_dets) {
-        // OCR校验格式
-        const result = await ocrStore.loadJSONL(text, file.name)
-        if (result.success) {
-          ElMessage.success('检测到OCR校验数据，正在跳转...')
-          setTimeout(() => navigateTo('/ocr-validation'), 1000)
-        }
-      } else {
-        ElMessage.warning('无法识别文件格式，请手动选择功能')
-      }
-    } catch (error) {
-      ElMessage.error('文件解析失败，请检查格式')
+    // 检查是否存在同名文件
+    const hasDuplicate = fileManagerStore.fileList.some(f => f.name === file.name) ||
+      (ocrStore.currentFileName && ocrStore.currentFileName === file.name)
+    if (hasDuplicate) {
+      ElMessage.warning('文件名已存在，请先重命名后再上传')
+      return false
     }
-    return false
+
+    // 尝试解析第一行来判断数据格式
+    const firstLine = text.trim().split('\n')[0]
+    const sample = JSON.parse(firstLine)
+
+    // 检查是否为合并校验格式 (Sample类型)
+    if (sample.pdf_name_1 && sample.pdf_name_2 && 'merging_idx_pairs' in sample) {
+      // 合并校验格式
+      fileManagerStore.addFile(file.name, text)
+      ElMessage.success('检测到合并校验数据，正在跳转...')
+      setTimeout(() => navigateTo('/merge-validation'), 1000)
+    } else if (sample.pdf_name && sample.layout_dets) {
+      // OCR校验格式
+      const result = await ocrStore.loadJSONL(text, file.name)
+      if (result.success) {
+        ElMessage.success('检测到OCR校验数据，正在跳转...')
+        setTimeout(() => navigateTo('/ocr-validation'), 1000)
+      }
+    } else {
+      ElMessage.warning('无法识别文件格式，请手动选择功能')
+    }
+  } catch (error) {
+    ElMessage.error('文件解析失败，请检查格式')
   }
+  return false
+}
 </script>
 
 <style lang="scss" scoped>

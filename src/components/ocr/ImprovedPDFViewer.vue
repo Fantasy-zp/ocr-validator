@@ -34,24 +34,28 @@
         <canvas ref="canvasRef"></canvas>
 
         <!-- 边界框层 -->
-        <svg v-if="showBoundingBoxes && elements.length > 0" class="bbox-overlay" :style="overlayStyle">
-          <rect v-for="(elem, idx) in elements" :key="idx" :x="elem.poly[0] * scale" :y="elem.poly[1] * scale"
-            :width="(elem.poly[2] - elem.poly[0]) * scale" :height="(elem.poly[3] - elem.poly[1]) * scale"
-            :class="getBBoxClass(elem.category_type, idx)" :opacity="selectedIndex === idx ? 1 : 0.3"
-            @click="$emit('element-click', idx)" />
+        <div v-if="showBoundingBoxes && elements.length > 0">
+          <svg class="bbox-overlay" :style="overlayStyle">
+            <rect v-for="(elem, idx) in elements" :key="idx" :x="elem.poly[0] * scale" :y="elem.poly[1] * scale"
+              :width="(elem.poly[2] - elem.poly[0]) * scale" :height="(elem.poly[3] - elem.poly[1]) * scale"
+              :class="getBBoxClass(elem.category_type, idx)" :opacity="selectedIndex === idx ? 1 : 0.3"
+              @click="$emit('element-click', idx)" />
 
-          <text v-if="showLabels" v-for="(elem, idx) in elements" :key="`label-${idx}`" :x="elem.poly[0] * scale + 2"
-            :y="elem.poly[1] * scale + 12" class="bbox-label" :opacity="selectedIndex === idx ? 1 : 0.7">
-            [{{ idx }}] {{ elem.category_type }}
-          </text>
-        </svg>
+            <g v-if="showLabels">
+              <text v-for="(elem, idx) in elements" :key="`label-${idx}`" :x="elem.poly[0] * scale + 2"
+                :y="elem.poly[1] * scale + 12" class="bbox-label" :opacity="selectedIndex === idx ? 1 : 0.7">
+                [{{ idx }}] {{ elem.category_type }}
+              </text>
+            </g>
+          </svg>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, markRaw } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ZoomIn, ZoomOut, Loading } from '@element-plus/icons-vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
 import type { LayoutElement } from '@/types'
@@ -87,9 +91,9 @@ const showBoundingBoxes = ref(true)
 const showLabels = ref(true)
 
 // PDF相关 - 不使用响应式
-let pdfDoc: any = null
-let pageObj: any = null
-let renderTaskObj: any = null
+let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null
+let pageObj: pdfjsLib.PDFPageProxy | null = null
+let renderTaskObj: pdfjsLib.RenderTask | null = null
 
 // 页面尺寸
 const pageWidth = ref(0)
@@ -120,9 +124,21 @@ const getBBoxClass = (type: string, index: number) => {
   return classes.join(' ')
 }
 
+// 重试计时器引用
+let retryTimer: number | null = null
+let retryAttempts = 0
+const maxRetryAttempts = 3
+const retryDelay = 1000 // 1秒
+
 // 加载并渲染PDF
 const loadPDF = async () => {
   if (!props.pdfName) return
+
+  // 清除之前的重试计时器
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
 
   loading.value = true
   error.value = ''
@@ -131,8 +147,18 @@ const loadPDF = async () => {
     // 获取PDF文件 - 使用带缓存的方法
     const pdfFile = await ocrStore.getPDFFileWithCache(props.pdfName)
     if (!pdfFile) {
-      throw new Error(`找不到PDF文件: ${props.pdfName}`)
+      // 如果找不到PDF文件，检查是否有目录句柄
+      if (ocrStore.pdfDirectoryHandle) {
+        // 如果有目录句柄但找不到文件，显示更友好的错误信息
+        throw new Error(`找不到PDF文件: ${props.pdfName}，请确保文件存在于所选文件夹中`)
+      } else {
+        // 如果没有目录句柄，提示用户需要选择文件夹
+        throw new Error(`请选择包含PDF文件的文件夹`)
+      }
     }
+
+    // 重置重试计数
+    retryAttempts = 0
 
     // 转换为ArrayBuffer
     const arrayBuffer = await pdfFile.arrayBuffer()
@@ -152,9 +178,34 @@ const loadPDF = async () => {
       renderPage()
     })
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('PDF加载失败:', err)
-    error.value = `加载失败: ${err.message}`
+    
+    // 判断是否需要自动重试
+    if (retryAttempts < maxRetryAttempts && ocrStore.pdfDirectoryHandle === null) {
+      // 如果没有目录句柄且重试次数未达到上限，尝试自动重试
+      retryAttempts++
+      loading.value = true
+      error.value = ''
+
+      console.log(`PDF加载失败，${retryDelay}ms后自动重试 (${retryAttempts}/${maxRetryAttempts})`)
+
+      retryTimer = setTimeout(() => {
+        loadPDF()
+      }, retryDelay)
+
+      return
+    }
+    
+    // 显示友好的错误信息
+    if (ocrStore.pdfDirectoryHandle === null) {
+      error.value = '正在等待PDF文件夹选择...'
+    } else if (err instanceof Error) {
+      error.value = `加载失败: ${err.message}`
+    } else {
+      error.value = '加载失败: 未知错误'
+    }
+
     loading.value = false
   }
 }
@@ -198,8 +249,8 @@ const renderPage = async () => {
     await renderTaskObj.promise
     renderTaskObj = null
 
-  } catch (err: any) {
-    if (err.name !== 'RenderingCancelledException') {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name !== 'RenderingCancelledException') {
       console.error('渲染失败:', err)
       error.value = `渲染失败: ${err.message}`
     }
@@ -251,16 +302,19 @@ watch(() => props.pdfName, (newName) => {
 
 // 监听PDF文件夹变化，在选择文件夹后自动重试加载PDF
 watch(() => ocrStore.pdfDirectoryHandle, async (newHandle) => {
-  if (newHandle && props.pdfName && error.value) {
-    // 如果有错误且文件夹已选择，自动重试加载PDF
-    console.log('检测到PDF文件夹变化，自动重试加载PDF:', props.pdfName);
+  if (newHandle && props.pdfName) {
+    // 如果有文件夹且有PDF名称，自动重试加载PDF
+    console.log('检测到PDF文件夹可用，自动尝试加载PDF:', props.pdfName);
     await loadPDF();
   }
 })
 
 onMounted(() => {
   if (props.pdfName) {
-    loadPDF()
+    // 初始加载前短暂等待，给文件夹句柄恢复一些时间
+    setTimeout(() => {
+      loadPDF()
+    }, 200);
   }
 })
 

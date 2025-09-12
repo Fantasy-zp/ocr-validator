@@ -51,6 +51,83 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
   // ===== 持久化方法 =====
 
+  // IndexedDB 助手类，用于存储和恢复文件系统句柄
+  class FileSystemDB {
+    private dbName = 'ocr_validation_db'
+    private db: IDBDatabase | null = null
+
+    async init(): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(this.dbName, 1)
+
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          this.db = request.result
+          resolve()
+        }
+
+        request.onupgradeneeded = (event) => {
+          const db = (event.target as IDBOpenDBRequest).result
+
+          // 创建对象存储来保存文件句柄
+          if (!db.objectStoreNames.contains('handles')) {
+            db.createObjectStore('handles', { keyPath: 'id' })
+          }
+        }
+      })
+    }
+
+    async saveHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+      if (!this.db) await this.init()
+
+      return new Promise((resolve, reject) => {
+        const transaction = this.db!.transaction(['handles'], 'readwrite')
+        const store = transaction.objectStore('handles')
+
+        const request = store.put({
+          id: 'pdfDirectory',
+          handle: handle,
+          timestamp: Date.now()
+        })
+
+        request.onsuccess = () => resolve()
+        request.onerror = () => reject(request.error)
+      })
+    }
+
+    async getHandle(): Promise<FileSystemDirectoryHandle | null> {
+      if (!this.db) await this.init()
+
+      return new Promise((resolve, reject) => {
+        const transaction = this.db!.transaction(['handles'], 'readonly')
+        const store = transaction.objectStore('handles')
+        const request = store.get('pdfDirectory')
+
+        request.onsuccess = () => {
+          const result = request.result
+          resolve(result ? result.handle : null)
+        }
+        request.onerror = () => reject(request.error)
+      })
+    }
+
+    async clearHandle(): Promise<void> {
+      if (!this.db) await this.init()
+
+      return new Promise((resolve, reject) => {
+        const transaction = this.db!.transaction(['handles'], 'readwrite')
+        const store = transaction.objectStore('handles')
+        const request = store.delete('pdfDirectory')
+
+        request.onsuccess = () => resolve()
+        request.onerror = () => reject(request.error)
+      })
+    }
+  }
+
+  // 创建FileSystemDB实例
+  const fileSystemDB = new FileSystemDB()
+
   /**
    * 保存OCR数据到本地存储
    */
@@ -72,9 +149,8 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       // 尝试持久化文件夹句柄（如果存在）
       if (pdfDirectoryHandle.value) {
         try {
-          // 浏览器的FileSystem API不支持直接持久化存储目录句柄
-          // 但现代浏览器会记住用户之前的授权选择
-          console.log('PDF文件夹已选择，浏览器将记住此选择（基于浏览器策略）')
+          await fileSystemDB.saveHandle(pdfDirectoryHandle.value)
+          console.log('PDF文件夹句柄已保存到IndexedDB')
         } catch (err) {
           console.warn('处理文件夹句柄时出错:', err)
         }
@@ -115,38 +191,57 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       // 重新计算所有样本的修改状态，确保修改标记正确显示
       recalculateModifications()
 
-      // 尝试恢复PDF文件夹访问权限
+      // 尝试恢复PDF文件夹句柄
       try {
         if ('showDirectoryPicker' in window && data.hasSelectedPDFDirectory) {
             // 显示提示，告知用户我们正在尝试恢复PDF文件夹访问权限
             console.log('尝试恢复PDF文件夹访问权限...');
-            
-            // 请求文件夹访问权限，但不强制选择，只是提示用户
+
+            // 延迟执行，让页面内容先加载完成
             setTimeout(async () => {
               try {
-                // 使用之前的目录作为起始位置
-                // @ts-ignore - showDirectoryPicker是现代浏览器的FileSystem API
-                const persistedHandles = await (window as any).showDirectoryPicker({
-                  mode: 'read',
-                  startIn: 'recently-used'
-                }).catch(() => null);
-                
-                if (persistedHandles) {
-                  // 如果用户确认了访问权限，加载PDF文件
-                  pdfDirectoryHandle.value = persistedHandles;
-                  await loadPDFsFromDirectory(persistedHandles);
-                  console.log('PDF文件夹访问权限已恢复');
+                // 尝试从IndexedDB获取持久化的目录句柄
+                const savedHandle = await fileSystemDB.getHandle()
+
+                if (savedHandle) {
+                  try {
+                    // 验证权限
+                    // @ts-expect-error - queryPermission方法存在于现代浏览器的FileSystemDirectoryHandle实现中
+                    const permission = await savedHandle.queryPermission({ mode: 'read' })
+
+                    if (permission === 'granted') {
+                      // 权限已授予，直接使用
+                      pdfDirectoryHandle.value = savedHandle
+                      await loadPDFsFromDirectory(savedHandle)
+                      console.log('PDF文件夹自动恢复成功')
+                    } else if (permission === 'prompt') {
+                      // 需要重新请求权限
+                      // @ts-expect-error - requestPermission方法存在于现代浏览器的FileSystemDirectoryHandle实现中
+                      const newPermission = await savedHandle.requestPermission({ mode: 'read' })
+
+                      if (newPermission === 'granted') {
+                        pdfDirectoryHandle.value = savedHandle
+                        await loadPDFsFromDirectory(savedHandle)
+                        console.log('PDF文件夹访问权限已恢复')
+                      } else {
+                        console.log('用户未授权PDF文件夹访问权限')
+                      }
+                    }
+                  } catch (err) {
+                    console.warn('验证或使用已保存的文件夹句柄失败:', err)
+                    // 权限问题，可能需要用户重新选择
+                  }
                 } else {
-                  console.log('用户未确认PDF文件夹访问权限');
+                  console.log('没有找到保存的PDF文件夹句柄')
                 }
               } catch (err) {
-                console.warn('恢复PDF文件夹访问失败:', err);
+                console.warn('恢复PDF文件夹访问失败:', err)
                 // 失败也没关系，用户可以重新选择
               }
             }, 1000); // 延迟1秒，让页面内容先加载完成
           }
       } catch (err) {
-        console.warn('恢复PDF文件夹访问失败:', err);
+        console.warn('恢复PDF文件夹访问失败:', err)
         // 失败也没关系，用户可以重新选择
       }
 
@@ -161,11 +256,11 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   /**
    * 从目录句柄加载PDF文件
    */
-  async function loadPDFsFromDirectory(dirHandle: any) {
+  async function loadPDFsFromDirectory(dirHandle: FileSystemDirectoryHandle) {
     try {
       pdfFiles.value.clear();
       // 使用entries()方法迭代目录内容
-      // @ts-ignore - FileSystemDirectoryHandle在TypeScript定义中可能不包含entries方法
+      // @ts-expect-error - FileSystemDirectoryHandle在TypeScript定义中可能不包含entries方法
       for await (const [name, entry] of dirHandle.entries?.() || []) {
         if (entry.kind === 'file' && name.endsWith('.pdf')) {
           const file = await entry.getFile();
@@ -408,6 +503,14 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       const dirHandle = await window.showDirectoryPicker()
       pdfDirectoryHandle.value = dirHandle
 
+      // 将目录句柄持久化到IndexedDB
+      try {
+        await fileSystemDB.saveHandle(dirHandle)
+        console.log('PDF文件夹句柄已保存到IndexedDB')
+      } catch (err) {
+        console.warn('保存文件夹句柄失败:', err)
+      }
+
       pdfFiles.value.clear()
       for await (const entry of dirHandle.values()) {
         if (entry.kind === 'file' && entry.name.endsWith('.pdf')) {
@@ -416,6 +519,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
           pdfFiles.value.set(nameWithoutExt, file)
         }
       }
+
+      // 保存状态到localStorage
+      await saveToLocalStorage()
 
       return pdfFiles.value.size
     } catch (error) {

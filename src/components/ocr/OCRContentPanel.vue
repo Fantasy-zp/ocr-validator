@@ -1,11 +1,7 @@
 <template>
   <div class="ocr-content-panel">
     <div class="panel-header">
-      <el-radio-group
-        :model-value="viewMode"
-        @update:model-value="$emit('update:view-mode', $event)"
-        size="small"
-      >
+      <el-radio-group :model-value="viewMode" @update:model-value="$emit('update:view-mode', $event)" size="small">
         <el-radio-button label="rendered">渲染效果</el-radio-button>
         <el-radio-button label="original">原始内容</el-radio-button>
         <el-radio-button label="json">JSON</el-radio-button>
@@ -21,24 +17,12 @@
       <div v-if="elements.length > 100" class="virtual-list">
         <el-auto-resizer>
           <template #default="{ height, width }">
-            <el-table-v2
-              :columns="virtualColumns"
-              :data="virtualData"
-              :width="width"
-              :height="height"
-              :row-height="100"
-              fixed
-            >
+            <el-table-v2 :columns="virtualColumns" :data="virtualData" :width="width" :height="height" :row-height="100"
+              fixed>
               <template #default="{ rowData, rowIndex }">
-                <OCRElementCard
-                  :element="rowData"
-                  :index="rowIndex"
-                  :view-mode="viewMode"
-                  :is-selected="selectedIndex === rowIndex"
-                  @click="handleElementClick(rowIndex)"
-                  @edit="handleElementEdit(rowIndex, $event)"
-                  @delete="handleElementDelete(rowIndex)"
-                />
+                <OCRElementCard :element="rowData" :index="rowIndex" :view-mode="viewMode"
+                  :is-selected="selectedIndex === rowIndex" @click="handleElementClick(rowIndex)"
+                  @edit="handleElementEdit(rowIndex, $event)" @delete="handleElementDelete(rowIndex)" />
               </template>
             </el-table-v2>
           </template>
@@ -47,17 +31,9 @@
 
       <!-- 普通列表（元素少于100个） -->
       <div v-else class="normal-list">
-        <OCRElementCard
-          v-for="(elem, idx) in elements"
-          :key="idx"
-          :element="elem"
-          :index="idx"
-          :view-mode="viewMode"
-          :is-selected="selectedIndex === idx"
-          @click="handleElementClick(idx)"
-          @edit="handleElementEdit(idx, $event)"
-          @delete="handleElementDelete(idx)"
-        />
+        <OCRElementCard v-for="(elem, idx) in elements" :key="idx" :element="elem" :index="idx" :view-mode="viewMode"
+          :is-selected="selectedIndex === idx" @click="handleElementClick(idx)" @edit="handleElementEdit(idx, $event)"
+          @delete="handleElementDelete(idx)" />
       </div>
     </div>
 
@@ -86,13 +62,7 @@
           <span class="info-value" v-if="!isEditingPageInfo">
             {{ pageInfo.language === 'zh' ? '中文' : '英文' }}
           </span>
-          <el-select
-            v-else
-            v-model="editPageInfoForm.language"
-            placeholder="请选择语言"
-            size="small"
-            style="width: 100px;"
-          >
+          <el-select v-else v-model="editPageInfoForm.language" placeholder="请选择语言" size="small" style="width: 100px;">
             <el-option label="中文" value="zh" />
             <el-option label="英文" value="en" />
           </el-select>
@@ -104,11 +74,7 @@
               {{ pageInfo.fuzzy_scan ? '是' : '否' }}
             </el-tag>
           </span>
-          <el-switch
-            v-else
-            v-model="editPageInfoForm.fuzzy_scan"
-            size="small"
-          />
+          <el-switch v-else v-model="editPageInfoForm.fuzzy_scan" size="small" />
         </div>
         <div class="info-item">
           <span class="info-label">水印：</span>
@@ -117,24 +83,14 @@
               {{ pageInfo.watermark ? '是' : '否' }}
             </el-tag>
           </span>
-          <el-switch
-            v-else
-            v-model="editPageInfoForm.watermark"
-            size="small"
-          />
+          <el-switch v-else v-model="editPageInfoForm.watermark" size="small" />
         </div>
         <div class="info-item">
           <span class="info-label">旋转：</span>
           <span class="info-value" v-if="!isEditingPageInfo">
             {{ getRotateText(pageInfo.rotate) }}
           </span>
-          <el-select
-            v-else
-            v-model="editPageInfoForm.rotate"
-            placeholder="请选择旋转角度"
-            size="small"
-            style="width: 120px;"
-          >
+          <el-select v-else v-model="editPageInfoForm.rotate" placeholder="请选择旋转角度" size="small" style="width: 120px;">
             <el-option label="正常" value="normal" />
             <el-option label="90" value="rotate90" />
             <el-option label="180" value="rotate180" />
@@ -148,11 +104,7 @@
               {{ pageInfo.is_table ? '是' : '否' }}
             </el-tag>
           </span>
-          <el-switch
-            v-else
-            v-model="editPageInfoForm.is_table"
-            size="small"
-          />
+          <el-switch v-else v-model="editPageInfoForm.is_table" size="small" />
         </div>
         <div class="info-item">
           <span class="info-label">包含图表：</span>
@@ -161,11 +113,7 @@
               {{ pageInfo.is_diagram ? '是' : '否' }}
             </el-tag>
           </span>
-          <el-switch
-            v-else
-            v-model="editPageInfoForm.is_diagram"
-            size="small"
-          />
+          <el-switch v-else v-model="editPageInfoForm.is_diagram" size="small" />
         </div>
       </div>
     </div>
