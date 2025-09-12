@@ -84,15 +84,16 @@ export class JSONLParser {
   static parseMergeJSONL(text: string): LoadResult & { samples: Sample[] } {
     const lines = text.trim().split('\n').filter(line => line.trim())
     const samples: Sample[] = []
-    const errors: Array<{line: number; error: Error}> = []
+    const errors: Array<{line: number; error: Error; lineContent?: string}> = []
 
     for (let i = 0; i < lines.length; i++) {
       try {
+        // 尝试解析JSON行
         const sample = JSON.parse(lines[i]) as Sample
 
         // 验证必要字段
         if (!this.validateMergeSample(sample)) {
-          throw new ValidationError('样本格式不正确', i + 1)
+          throw new ValidationError('样本格式不正确，缺少必要字段', i + 1)
         }
 
         // 确保 merging_idx_pairs 是数组
@@ -105,7 +106,19 @@ export class JSONLParser {
         samples.push(sample)
 
       } catch (e) {
-        errors.push({ line: i + 1, error: e as Error })
+        const error = e as Error
+        // 如果是JSON解析错误，提供更详细的错误信息
+        if (error instanceof SyntaxError) {
+          // 提取行内容的前50个字符，避免在控制台显示过长的内容
+          const linePreview = lines[i].substring(0, 50) + (lines[i].length > 50 ? '...' : '')
+          errors.push({
+            line: i + 1,
+            error: new SyntaxError(`JSON解析错误: ${error.message}。行内容预览: ${linePreview}`),
+            lineContent: lines[i] // 保存完整的行内容，便于调试
+          })
+        } else {
+          errors.push({ line: i + 1, error })
+        }
       }
     }
 
@@ -152,28 +165,15 @@ export class JSONLParser {
   /**
    * 验证合并样本格式
    */
-  private static validateMergeSample(sample: any): sample is Sample {
-    return !!(
-      sample &&
-      typeof sample.pdf_name_1 === 'string' &&
-      typeof sample.pdf_name_2 === 'string' &&
-      ['zh', 'en'].includes(sample.language) &&
-      Array.isArray(sample.md_elem_list_1) &&
-      Array.isArray(sample.md_elem_list_2)
-    )
+  private static validateMergeSample(sample: unknown): sample is Sample {
+    return !!(sample && typeof sample === 'object' && 'pdf_name_1' in sample && 'pdf_name_2' in sample && 'language' in sample && 'md_elem_list_1' in sample && 'md_elem_list_2' in sample && typeof (sample as any).pdf_name_1 === 'string' && typeof (sample as any).pdf_name_2 === 'string' && ['zh', 'en'].includes((sample as any).language) && Array.isArray((sample as any).md_elem_list_1) && Array.isArray((sample as any).md_elem_list_2))
   }
 
   /**
    * 验证OCR样本格式
    */
-  private static validateOCRSample(sample: any): sample is OCRSample {
-    return !!(
-      sample &&
-      typeof sample.pdf_name === 'string' &&
-      Array.isArray(sample.layout_dets) &&
-      sample.page_info &&
-      typeof sample.page_info === 'object'
-    )
+  private static validateOCRSample(sample: unknown): sample is OCRSample {
+    return !!(sample && typeof sample === 'object' && 'pdf_name' in sample && 'layout_dets' in sample && 'page_info' in sample && typeof (sample as any).pdf_name === 'string' && Array.isArray((sample as any).layout_dets) && (sample as any).page_info && typeof (sample as any).page_info === 'object')
   }
 
   /**
@@ -271,7 +271,7 @@ export class UIUtils {
   /**
    * 防抖函数
    */
-  static debounce<T extends (...args: any[]) => any>(
+  static debounce<T extends (...args: Array<unknown>) => unknown>(
     func: T,
     wait: number
   ): (...args: Parameters<T>) => void {
@@ -285,7 +285,7 @@ export class UIUtils {
   /**
    * 节流函数
    */
-  static throttle<T extends (...args: any[]) => any>(
+  static throttle<T extends (...args: Array<unknown>) => unknown>(
     func: T,
     limit: number
   ): (...args: Parameters<T>) => void {

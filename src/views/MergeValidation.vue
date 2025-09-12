@@ -127,8 +127,23 @@ const handleFileUpload = async (file: File) => {
       }
 
       if (result.errors.length > 0) {
-        console.warn('部分数据解析失败:', result.errors)
-        ElMessage.warning(`${result.errors.length} 行数据解析失败，请检查控制台`)
+        // 构建详细的错误信息
+        const detailedErrors = result.errors.map((err) => 
+          `第${err.line}行: ${err.error instanceof Error ? err.error.message : String(err.error)}`
+        ).join('\n')
+        
+        console.warn('部分数据解析失败:\n', detailedErrors)
+        
+        // 显示包含失败行数的提示
+        if (result.errors.length <= 5) {
+          // 失败行数较少时，直接显示行数
+          const errorLines = result.errors.map(err => err.line).join(', ')
+          ElMessage.warning(`${result.errors.length} 行数据解析失败 (第${errorLines}行)，请查看控制台获取详细错误信息`)
+        } else {
+          // 失败行数较多时，显示概览
+          const firstErrors = result.errors.slice(0, 3).map(err => err.line).join(', ')
+          ElMessage.warning(`${result.errors.length} 行数据解析失败 (前几行: ${firstErrors}...)，请检查控制台获取全部详细错误信息`)
+        }
       }
     } else {
       ElMessage.error('文件加载失败：没有有效数据')

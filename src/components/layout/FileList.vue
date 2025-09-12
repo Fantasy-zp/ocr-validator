@@ -130,6 +130,7 @@ import {
 import { useFileManagerStore, type DatasetFile } from '@/stores/fileManager'
 import { useDatasetStore } from '@/stores/dataset'
 import { exportToJSONL } from '@/utils/markdown'
+import { FileUtils, JSONLParser } from '@/utils/helpers'
 
 const fileManagerStore = useFileManagerStore()
 const datasetStore = useDatasetStore()
@@ -191,12 +192,43 @@ function handleFileSelect(fileId: string) {
 async function handleUpload(file: File) {
   try {
     const text = await file.text()
+    
+    // 检测文件类型
+    const fileType = FileUtils.detectFileType(text)
+    if (fileType !== 'merge') {
+      ElMessage.warning('文件格式不匹配，请上传合并校验格式的JSONL文件')
+      return false
+    }
+    
+    // 解析JSONL文件并检查错误
+    const result = JSONLParser.parseMergeJSONL(text)
+    
+    if (result.errors.length > 0) {
+      // 构建详细错误信息
+      const detailedErrors = result.errors.map((err: {line: number; error: unknown}) => 
+        `第${err.line}行: ${err.error instanceof Error ? err.error.message : String(err.error)}`
+      ).join('\n')
+      
+      console.warn('文件解析错误详情:\n', detailedErrors)
+      
+      // 显示包含失败行数的提示
+      if (result.errors.length <= 5) {
+        // 失败行数较少时，直接显示行数
+        const errorLines = result.errors.map(err => err.line).join(', ')
+        ElMessage.warning(`${result.errors.length} 行数据解析失败 (第${errorLines}行)，文件已添加但部分数据可能不完整\n请查看控制台获取详细错误信息`)
+      } else {
+        // 失败行数较多时，显示概览
+        const firstErrors = result.errors.slice(0, 3).map(err => err.line).join(', ')
+        ElMessage.warning(`${result.errors.length} 行数据解析失败 (前几行: ${firstErrors}...)，文件已添加但部分数据可能不完整\n请查看控制台获取全部详细错误信息`)
+      }
+    }
+    
     const fileId = fileManagerStore.addFile(file.name, text)
 
     // 自动切换到新文件
     handleFileSelect(fileId)
 
-    ElMessage.success(`成功添加文件: ${file.name}`)
+    ElMessage.success(`成功添加文件: ${file.name}，加载 ${result.samples.length} 条数据`)
   } catch (error: unknown) {
     ElMessage.error('文件添加失败: ' + (error instanceof Error ? error.message : String(error)))
   }
