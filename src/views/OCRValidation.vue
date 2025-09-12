@@ -1,43 +1,19 @@
 <template>
   <div class="ocr-validation">
-    <UniversalHeader
-      :show-mode-switch="true"
-      :show-upload="true"
-      :show-navigation="true"
-      :show-history="true"
-      :has-data="ocrStore.hasData"
-      :current-index="ocrStore.currentIndex"
-      :total-items="ocrStore.totalSamples"
-      :is-modified="ocrStore.isModified"
-      :language="ocrStore.currentSample?.page_info?.language"
-      :can-undo="ocrStore.canUndo"
-      :can-redo="ocrStore.canRedo"
-      :modified-count="ocrStore.modifiedCount"
-      :extra-stats="pdfStatsText"
-      upload-text="上传JSONL"
-      upload-accept=".jsonl"
-      export-text="导出数据"
-      export-type="success"
-      keyboard-hint="使用 A/D 键导航，Ctrl+Z/Y 撤销/重做"
-      @main-upload="handleJSONLUpload"
-      @previous="ocrStore.prevSample"
-      @next="ocrStore.nextSample"
-      @navigate="ocrStore.navigateTo"
-      @undo="handleUndo"
-      @redo="handleRedo"
-      @export="handleExport"
-    >
+    <UniversalHeader :show-mode-switch="true" :show-upload="true" :show-navigation="true" :show-history="true"
+      :has-data="ocrStore.hasData" :current-index="ocrStore.currentIndex" :total-items="ocrStore.totalSamples"
+      :is-modified="ocrStore.isModified" :language="ocrStore.currentSample?.page_info?.language"
+      :can-undo="ocrStore.canUndo" :can-redo="ocrStore.canRedo" :modified-count="ocrStore.modifiedCount"
+      :extra-stats="pdfStatsText" upload-text="上传JSONL" upload-accept=".jsonl" export-text="导出数据" export-type="success"
+      keyboard-hint="使用 A/D 键导航，Ctrl+Z/Y 撤销/重做" @main-upload="handleJSONLUpload" @previous="ocrStore.prevSample"
+      @next="ocrStore.nextSample" @navigate="ocrStore.navigateTo" @undo="handleUndo" @redo="handleRedo"
+      @export="handleExport">
       <template #extra-actions>
         <el-button @click="$router.push('/')" :icon="HomeFilled">
           返回首页
         </el-button>
-        
-        <el-upload
-          :show-file-list="false"
-          :before-upload="handlePDFUpload"
-          accept=".pdf"
-          multiple
-        >
+
+        <el-upload :show-file-list="false" :before-upload="handlePDFUpload" accept=".pdf" multiple>
           <el-button :icon="DocumentAdd">
             上传PDF
           </el-button>
@@ -53,50 +29,33 @@
       <div v-if="ocrStore.hasData" class="content-wrapper">
         <!-- 左侧PDF查看器 -->
         <div class="pdf-panel">
-          <ImprovedPDFViewer
-            :pdf-name="ocrStore.currentSample?.pdf_name"
-            :elements="ocrStore.currentElements"
-            :selected-index="ocrStore.selectedElementIndex"
-            @element-click="ocrStore.selectElement"
-          />
+          <ImprovedPDFViewer :pdf-name="ocrStore.currentSample?.pdf_name" :elements="ocrStore.currentElements"
+            :selected-index="ocrStore.selectedElementIndex" @element-click="ocrStore.selectElement" />
         </div>
 
         <!-- 右侧内容展示 -->
         <div class="content-panel">
-          <OCRContentPanel
-            :elements="ocrStore.currentElements"
-            :view-mode="ocrStore.viewMode"
-            :selected-index="ocrStore.selectedElementIndex"
-            :page-info="ocrStore.currentSample?.page_info || null"
-            @update:view-mode="ocrStore.setViewMode"
-            @element-click="ocrStore.selectElement"
-            @element-edit="handleElementEdit"
-            @element-delete="handleElementDelete"
-          />
+          <OCRContentPanel :elements="ocrStore.currentElements" :view-mode="ocrStore.viewMode"
+            :selected-index="ocrStore.selectedElementIndex" :page-info="ocrStore.currentSample?.page_info || null"
+            @update:view-mode="ocrStore.setViewMode" @element-click="ocrStore.selectElement"
+            @element-edit="handleElementEdit" @element-delete="handleElementDelete" />
         </div>
       </div>
 
       <div v-else class="empty-container">
         <el-empty description="请上传JSONL文件和PDF文件开始">
           <div class="upload-actions">
-            <el-upload
-              :show-file-list="false"
-              :before-upload="handleJSONLUpload"
-              accept=".jsonl"
-              drag
-            >
-              <el-icon class="upload-icon"><UploadFilled /></el-icon>
+            <el-upload :show-file-list="false" :before-upload="handleJSONLUpload" accept=".jsonl" drag>
+              <el-icon class="upload-icon">
+                <UploadFilled />
+              </el-icon>
               <div class="upload-text">
                 <p>拖拽JSONL文件到这里开始</p>
                 <p class="upload-hint">或点击下方按钮上传</p>
               </div>
             </el-upload>
             <div class="upload-buttons">
-              <el-upload
-                :show-file-list="false"
-                :before-upload="handleJSONLUpload"
-                accept=".jsonl"
-              >
+              <el-upload :show-file-list="false" :before-upload="handleJSONLUpload" accept=".jsonl">
                 <el-button type="primary">上传JSONL文件</el-button>
               </el-upload>
             </div>
@@ -179,7 +138,7 @@ const handleJSONLUpload = async (file: File) => {
 
       // 传入文件名
       ocrStore.loadJSONL(text, file.name)
-      
+
       // 这些属性已经在loadJSONL方法内部处理，不需要再次设置
       // ocrStore.currentIndex = 0
       // ocrStore.selectedElementIndex = null
@@ -206,7 +165,7 @@ const handleJSONLUpload = async (file: File) => {
           } catch {
             ElMessage.warning('文件夹选择已取消')
           }
-        }).catch(() => {})
+        }).catch(() => { })
       }
 
       if (result.errors.length > 0) {
@@ -261,7 +220,7 @@ const handleElementDelete = (index: number) => {
   ).then(() => {
     ocrStore.deleteElement(index)
     ElMessage.success('元素已删除')
-  }).catch(() => {})
+  }).catch(() => { })
 }
 
 // 撤销操作

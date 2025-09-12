@@ -7,12 +7,14 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Sample, LoadResult, DatasetStoreState } from '@/types'
 import { JSONLParser, DataUtils } from '@/utils/helpers'
+import { useFileManagerStore } from './fileManager'
 
 export const useDatasetStore = defineStore('dataset', () => {
   // ===== 状态管理 =====
   const samples = ref<Sample[]>([])
   const currentIndex = ref(0)
   const modifiedIndices = ref(new Set<number>())
+  const fileManagerStore = useFileManagerStore()
 
   // ===== 计算属性 =====
   const currentSample = computed(() => samples.value[currentIndex.value] || null)
@@ -91,6 +93,12 @@ export const useDatasetStore = defineStore('dataset', () => {
 
     // 发送修改事件（可用于自动保存等功能）
     emitModificationEvent(currentIndex.value, oldPairs, pairs)
+
+    // 自动保存数据
+    if (fileManagerStore.currentFile && samples.value.length > 0) {
+      fileManagerStore.updateCurrentFileSamples(samples.value)
+      fileManagerStore.updateCurrentFileIndex(currentIndex.value)
+    }
   }
 
   /**
@@ -112,6 +120,12 @@ export const useDatasetStore = defineStore('dataset', () => {
         }
       }
     })
+
+    // 自动保存数据
+    if (fileManagerStore.currentFile && samples.value.length > 0) {
+      fileManagerStore.updateCurrentFileSamples(samples.value)
+      fileManagerStore.updateCurrentFileIndex(currentIndex.value)
+    }
   }
 
   // ===== 导航操作 =====
@@ -200,7 +214,7 @@ export const useDatasetStore = defineStore('dataset', () => {
    * 重置所有样本到原始状态
    */
   function resetAllSamples() {
-    samples.value.forEach((sample, index) => {
+    samples.value.forEach((sample) => {
       if (sample.original_pairs) {
         sample.merging_idx_pairs = DataUtils.deepClone(sample.original_pairs)
       }

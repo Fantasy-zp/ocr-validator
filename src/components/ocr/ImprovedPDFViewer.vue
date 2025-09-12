@@ -17,7 +17,9 @@
 
     <div class="viewer-container" ref="containerRef">
       <div v-if="loading" class="loading-mask">
-        <el-icon class="is-loading" size="32"><Loading /></el-icon>
+        <el-icon class="is-loading" size="32">
+          <Loading />
+        </el-icon>
         <p>加载中...</p>
       </div>
 
@@ -32,32 +34,14 @@
         <canvas ref="canvasRef"></canvas>
 
         <!-- 边界框层 -->
-        <svg
-          v-if="showBoundingBoxes && elements.length > 0"
-          class="bbox-overlay"
-          :style="overlayStyle"
-        >
-          <rect
-            v-for="(elem, idx) in elements"
-            :key="idx"
-            :x="elem.poly[0] * scale"
-            :y="elem.poly[1] * scale"
-            :width="(elem.poly[2] - elem.poly[0]) * scale"
-            :height="(elem.poly[3] - elem.poly[1]) * scale"
-            :class="getBBoxClass(elem.category_type, idx)"
-            :opacity="selectedIndex === idx ? 1 : 0.3"
-            @click="$emit('element-click', idx)"
-          />
+        <svg v-if="showBoundingBoxes && elements.length > 0" class="bbox-overlay" :style="overlayStyle">
+          <rect v-for="(elem, idx) in elements" :key="idx" :x="elem.poly[0] * scale" :y="elem.poly[1] * scale"
+            :width="(elem.poly[2] - elem.poly[0]) * scale" :height="(elem.poly[3] - elem.poly[1]) * scale"
+            :class="getBBoxClass(elem.category_type, idx)" :opacity="selectedIndex === idx ? 1 : 0.3"
+            @click="$emit('element-click', idx)" />
 
-          <text
-            v-if="showLabels"
-            v-for="(elem, idx) in elements"
-            :key="`label-${idx}`"
-            :x="elem.poly[0] * scale + 2"
-            :y="elem.poly[1] * scale + 12"
-            class="bbox-label"
-            :opacity="selectedIndex === idx ? 1 : 0.7"
-          >
+          <text v-if="showLabels" v-for="(elem, idx) in elements" :key="`label-${idx}`" :x="elem.poly[0] * scale + 2"
+            :y="elem.poly[1] * scale + 12" class="bbox-label" :opacity="selectedIndex === idx ? 1 : 0.7">
             [{{ idx }}] {{ elem.category_type }}
           </text>
         </svg>

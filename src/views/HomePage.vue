@@ -3,7 +3,9 @@
     <div class="hero-section">
       <div class="hero-content">
         <h1 class="hero-title">
-          <el-icon size="48"><Document /></el-icon>
+          <el-icon size="48">
+            <Document />
+          </el-icon>
           OCR 数据集校验系统
         </h1>
         <p class="hero-description">
@@ -16,7 +18,9 @@
       <div class="features-container">
         <div class="feature-card" @click="navigateTo('/merge-validation')">
           <div class="feature-icon merge-icon">
-            <el-icon size="64"><Connection /></el-icon>
+            <el-icon size="64">
+              <Connection />
+            </el-icon>
           </div>
           <div class="feature-content">
             <h3>跨页合并校验</h3>
@@ -31,14 +35,18 @@
           <div class="feature-action">
             <el-button type="primary" size="large">
               开始合并校验
-              <el-icon><ArrowRight /></el-icon>
+              <el-icon>
+                <ArrowRight />
+              </el-icon>
             </el-button>
           </div>
         </div>
 
         <div class="feature-card" @click="navigateTo('/ocr-validation')">
           <div class="feature-icon ocr-icon">
-            <el-icon size="64"><View /></el-icon>
+            <el-icon size="64">
+              <View />
+            </el-icon>
           </div>
           <div class="feature-content">
             <h3>OCR内容校验</h3>
@@ -53,7 +61,9 @@
           <div class="feature-action">
             <el-button type="success" size="large">
               开始内容校验
-              <el-icon><ArrowRight /></el-icon>
+              <el-icon>
+                <ArrowRight />
+              </el-icon>
             </el-button>
           </div>
         </div>
@@ -78,14 +88,10 @@
     </div>
 
     <div class="quick-actions">
-      <el-upload
-        :show-file-list="false"
-        :before-upload="handleQuickUpload"
-        accept=".jsonl"
-        drag
-        class="upload-dragger"
-      >
-        <el-icon class="upload-icon"><UploadFilled /></el-icon>
+      <el-upload :show-file-list="false" :before-upload="handleQuickUpload" accept=".jsonl" drag class="upload-dragger">
+        <el-icon class="upload-icon">
+          <UploadFilled />
+        </el-icon>
         <div class="upload-text">
           <p>拖拽JSONL文件到这里快速开始</p>
           <p class="upload-hint">支持合并校验和内容校验格式</p>
@@ -118,7 +124,7 @@ const ocrStore = useOCRValidationStore()
 // 统计数据
 const totalFiles = computed(() => {
   // 合并页面的文件数 + OCR页面的文件数(0或1)
-  let ocrFileCount = ocrStore.currentFileName ? 1 : 0
+  const ocrFileCount = ocrStore.currentFileName ? 1 : 0
   return fileManagerStore.fileList.length + ocrFileCount
 })
 const totalSamples = computed(() => datasetStore.totalSamples + ocrStore.totalSamples)
@@ -135,8 +141,8 @@ const handleQuickUpload = async (file: File) => {
     const text = await file.text()
 
     // 检查是否存在同名文件
-    const hasDuplicate = fileManagerStore.fileList.some(f => f.name === file.name) || 
-                        (ocrStore.currentFileName && ocrStore.currentFileName === file.name)
+    const hasDuplicate = fileManagerStore.fileList.some(f => f.name === file.name) ||
+      (ocrStore.currentFileName && ocrStore.currentFileName === file.name)
     if (hasDuplicate) {
       ElMessage.warning('文件名已存在，请先重命名后再上传')
       return false

@@ -228,9 +228,9 @@ const virtualData = computed(() =>
 const getRotateText = (rotate: string) => {
   const rotateMap: Record<string, string> = {
     'normal': '正常',
-    'rotate90': '顺时针90度',
-    'rotate180': '旋转180度',
-    'rotate270': '逆时针90度'
+    'rotate90': '90',
+    'rotate180': '180',
+    'rotate270': '270'
   }
   return rotateMap[rotate] || '未知'
 }

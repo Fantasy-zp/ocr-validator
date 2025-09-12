@@ -1,31 +1,17 @@
 <template>
   <div class="merge-validation">
-    <UniversalHeader
-      :show-mode-switch="true"
-      :show-upload="true"
-      :show-navigation="true"
-      :show-save="true"
-      :has-data="datasetStore.hasData"
-      :current-index="datasetStore.currentIndex"
-      :total-items="datasetStore.totalSamples"
-      :is-modified="datasetStore.isModified"
-      :language="datasetStore.currentSample?.language"
-      :modified-count="datasetStore.modifiedCount"
-      upload-text="上传JSONL文件"
-      upload-accept=".jsonl"
-      export-text="导出全部"
-      @main-upload="handleFileUpload"
-      @previous="datasetStore.prevSample"
-      @next="datasetStore.nextSample"
-      @navigate="datasetStore.navigateTo"
-      @save="handleSave"
-      @export="handleExport"
-    >
+    <UniversalHeader :show-mode-switch="true" :show-upload="true" :show-navigation="true" :show-save="true"
+      :has-data="datasetStore.hasData" :current-index="datasetStore.currentIndex"
+      :total-items="datasetStore.totalSamples" :is-modified="datasetStore.isModified"
+      :language="datasetStore.currentSample?.language" :modified-count="datasetStore.modifiedCount"
+      upload-text="上传JSONL文件" upload-accept=".jsonl" export-text="导出全部" @main-upload="handleFileUpload"
+      @previous="datasetStore.prevSample" @next="datasetStore.nextSample" @navigate="datasetStore.navigateTo"
+      @save="handleSave" @export="handleExport">
       <template #extra-actions>
         <el-button @click="$router.push('/')" :icon="HomeFilled">
           返回首页
         </el-button>
-        
+
         <el-button @click="fileManagerStore.toggleFileList" :icon="FolderOpened">
           文件管理
         </el-button>
@@ -36,35 +22,22 @@
       <div v-if="datasetStore.hasData" class="content-wrapper">
         <ConnectionLayer />
         <div class="panels-container">
-          <ContentPanel
-            :elements="datasetStore.currentSample?.md_elem_list_1 || []"
-            side="left"
-            :view-mode="editorStore.leftViewMode"
-            :selected="editorStore.selectedLeft"
-            @update:view-mode="editorStore.setLeftViewMode"
-            @element-click="editorStore.selectLeftElement"
-          />
+          <ContentPanel :elements="datasetStore.currentSample?.md_elem_list_1 || []" side="left"
+            :view-mode="editorStore.leftViewMode" :selected="editorStore.selectedLeft"
+            @update:view-mode="editorStore.setLeftViewMode" @element-click="editorStore.selectLeftElement" />
 
-          <ContentPanel
-            :elements="datasetStore.currentSample?.md_elem_list_2 || []"
-            side="right"
-            :view-mode="editorStore.rightViewMode"
-            :selected="editorStore.selectedRight"
-            @update:view-mode="editorStore.setRightViewMode"
-            @element-click="editorStore.selectRightElement"
-          />
+          <ContentPanel :elements="datasetStore.currentSample?.md_elem_list_2 || []" side="right"
+            :view-mode="editorStore.rightViewMode" :selected="editorStore.selectedRight"
+            @update:view-mode="editorStore.setRightViewMode" @element-click="editorStore.selectRightElement" />
         </div>
       </div>
 
       <div v-else class="empty-container">
         <el-empty description="请上传JSONL文件开始">
-          <el-upload
-            :show-file-list="false"
-            :before-upload="handleFileUpload"
-            accept=".jsonl"
-            drag
-          >
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
+          <el-upload :show-file-list="false" :before-upload="handleFileUpload" accept=".jsonl" drag>
+            <el-icon class="upload-icon">
+              <UploadFilled />
+            </el-icon>
             <div class="upload-text">拖拽文件到这里或点击上传</div>
           </el-upload>
         </el-empty>
@@ -196,11 +169,13 @@ const handleExport = () => {
 onMounted(() => {
   setupKeyboardShortcuts()
 
-  // 检查是否有已保存的文件数据
-  if (fileManagerStore.currentFile && !datasetStore.hasData) {
+  // 加载持久化数据，无论datasetStore是否已有数据
+  if (fileManagerStore.currentFile) {
     const currentFile = fileManagerStore.currentFile
     datasetStore.samples = currentFile.samples
     datasetStore.currentIndex = currentFile.currentIndex
+    // 重新计算所有样本的修改状态，确保修改标记正确显示
+    datasetStore.recalculateModifications()
   }
 })
 

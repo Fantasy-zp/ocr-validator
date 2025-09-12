@@ -29,7 +29,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // PDF文件缓存，用于优化性能
   const pdfFileCache = ref<Map<string, {file: File, lastAccessed: number}>>(new Map())
   const maxCacheSize = ref(50) // 限制缓存大小，可根据需要调整
-  
+
   // 当前JSONL文件名
   const currentFileName = ref<string | null>(null)
 
@@ -40,7 +40,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
   // 修改追踪
   const modifiedSamples = ref<Set<number>>(new Set())
-  
+
   // 持久化键名
   const STORAGE_KEY = 'ocr_validation_data'
 
@@ -48,9 +48,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   const currentSample = computed(() => samples.value[currentIndex.value] || null)
   const totalSamples = computed(() => samples.value.length)
   const hasData = computed(() => samples.value.length > 0)
-  
+
   // ===== 持久化方法 =====
-  
+
   /**
    * 保存OCR数据到本地存储
    */
@@ -58,7 +58,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     try {
       // File对象无法直接序列化，所以只保存文件名
       const pdfFileNames = Array.from(pdfFiles.value.keys())
-      
+
       const data = {
         samples: samples.value,
         currentIndex: currentIndex.value,
@@ -67,13 +67,13 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         // 注意：由于File对象无法序列化，这里只保存文件名，不保存文件内容
         // PDF文件需要用户重新选择
       }
-      
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch (e) {
       console.error('保存OCR数据失败:', e)
     }
   }
-  
+
   /**
    * 从本地存储加载OCR数据
    */
@@ -81,30 +81,30 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (!stored) return
-      
+
       const data = JSON.parse(stored)
-      
+
       // 恢复基础数据
       if (data.samples) {
         samples.value = data.samples
       }
-      
+
       if (typeof data.currentIndex === 'number') {
         currentIndex.value = Math.min(data.currentIndex, samples.value.length - 1)
       }
-      
+
       if (data.currentFileName) {
         currentFileName.value = data.currentFileName
       }
-      
+
       // 重置其他状态
       selectedElementIndex.value = null
       modifiedSamples.value.clear()
       clearHistory()
-      
+
       // 重新计算所有样本的修改状态，确保修改标记正确显示
       recalculateModifications()
-      
+
       console.log('OCR数据从本地存储加载成功')
     } catch (e) {
       console.error('加载OCR数据失败:', e)
@@ -112,7 +112,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       localStorage.removeItem(STORAGE_KEY)
     }
   }
-  
+
   /**
    * 清除本地存储中的OCR数据
    */
@@ -146,7 +146,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       .map(s => s.pdf_name)
       .filter(name => !pdfFiles.value.has(name.replace('.pdf', '')))
   }))
-  
+
   // 当前JSONL文件信息
   const currentFileInfo = computed(() => ({
     name: currentFileName.value,
@@ -173,12 +173,12 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       selectedElementIndex.value = null
       modifiedSamples.value.clear()
       clearHistory()
-      
+
       // 保存文件名
       if (fileName) {
         currentFileName.value = fileName
       }
-      
+
       // 保存到本地存储
       saveToLocalStorage()
     }
@@ -189,21 +189,21 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       errors: result.errors
     }
   }
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
+
+
+
+
+
+
+
+
   /**
    * 撤销操作
    */
@@ -245,7 +245,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       return false
     }
   }
-  
+
   /**
    * 直接设置样本数据
    */
@@ -271,47 +271,47 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     const nameWithoutExt = pdfName.replace('.pdf', '')
     return pdfFiles.value.get(nameWithoutExt)
   }
-  
+
   /**
    * 获取PDF文件（带缓存机制）
    */
   async function getPDFFileWithCache(pdfName: string): Promise<File | undefined> {
     const nameWithoutExt = pdfName.replace('.pdf', '')
-    
+
     // 1. 检查缓存中是否存在
     if (pdfFileCache.value.has(nameWithoutExt)) {
       const cached = pdfFileCache.value.get(nameWithoutExt)!
       cached.lastAccessed = Date.now() // 更新访问时间
       return cached.file
     }
-    
+
     // 2. 检查原始存储中是否存在
     if (pdfFiles.value.has(nameWithoutExt)) {
-      const file = pdfFiles.value.get(nameWithoutExt)! 
+      const file = pdfFiles.value.get(nameWithoutExt)!
       // 添加到缓存
       addToCache(nameWithoutExt, file)
       return file
     }
-    
+
     // 3. 如果有目录句柄，按需加载文件
     if (pdfDirectoryHandle.value) {
       try {
         const entry = await pdfDirectoryHandle.value.getFileHandle(`${nameWithoutExt}.pdf`)
         const file = await entry.getFile()
-        
+
         // 添加到缓存
         addToCache(nameWithoutExt, file)
-        
+
         return file
       } catch (error) {
         console.error(`无法加载PDF文件: ${pdfName}`, error)
         return undefined
       }
     }
-    
+
     return undefined
   }
-  
+
   /**
    * 添加文件到缓存，管理缓存大小
    */
@@ -324,7 +324,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         pdfFileCache.value.delete(oldest[0])
       }
     }
-    
+
     // 存入缓存
     pdfFileCache.value.set(nameWithoutExt, {
       file,
@@ -404,6 +404,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     currentSample.value.layout_dets[index] = newElement
     modifiedSamples.value.add(currentIndex.value)
 
+    // 自动保存数据
+    saveToLocalStorage()
+
     return true
   }
 
@@ -431,6 +434,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     currentSample.value.layout_dets.push(newElement)
     modifiedSamples.value.add(currentIndex.value)
 
+    // 自动保存数据
+    saveToLocalStorage()
+
     return true
   }
 
@@ -445,7 +451,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     // 获取排序后索引对应的原始元素
     const elementToDelete = currentElements.value[index]
     // 找到该元素在原始数组中的位置
-    const originalIndex = currentSample.value.layout_dets.findIndex(el => 
+    const originalIndex = currentSample.value.layout_dets.findIndex(el =>
       el === elementToDelete || (el.order === elementToDelete.order && el.text === elementToDelete.text)
     )
 
@@ -464,17 +470,20 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     })
 
     // 删除元素
-    currentSample.value.layout_dets.splice(originalIndex, 1)
-    modifiedSamples.value.add(currentIndex.value)
+  currentSample.value.layout_dets.splice(originalIndex, 1)
+  modifiedSamples.value.add(currentIndex.value)
 
-    // 更新选中状态
-    if (selectedElementIndex.value === index) {
-      selectedElementIndex.value = null
-    } else if (selectedElementIndex.value !== null && selectedElementIndex.value > index) {
-      selectedElementIndex.value--
-    }
+  // 自动保存数据
+  saveToLocalStorage()
 
-    return true
+  // 更新选中状态
+  if (selectedElementIndex.value === index) {
+    selectedElementIndex.value = null
+  } else if (selectedElementIndex.value !== null && selectedElementIndex.value > index) {
+    selectedElementIndex.value--
+  }
+
+  return true
   }
 
   /**
@@ -674,6 +683,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     currentSample.value.page_info = newPageInfo
     modifiedSamples.value.add(currentIndex.value)
 
+    // 自动保存数据
+    saveToLocalStorage()
+
     return true
   }
 
@@ -713,7 +725,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     historyIndex.value = snapshot.historyIndex
     modifiedSamples.value = snapshot.modifiedSamples
   }
-  
+
   /**
    * 重新计算所有修改状态
    */
@@ -725,20 +737,20 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       }
     })
   }
-  
+
   /**
    * 重置所有修改标记
    */
   function resetModificationStatus() {
     modifiedSamples.value.clear()
   }
-  
+
   /**
    * 更新单个样本的修改状态
    */
   function updateModificationStatus(index: number) {
     if (index < 0 || index >= samples.value.length) return
-    
+
     const sample = samples.value[index]
     if (DataUtils.isOCRSampleModified(sample)) {
       modifiedSamples.value.add(index)
@@ -746,7 +758,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       modifiedSamples.value.delete(index)
     }
   }
-  
+
   /**
    * 重置当前样本到原始状态
    */
@@ -787,7 +799,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     // 移除修改标记
     modifiedSamples.value.delete(currentIndex.value)
   }
-  
+
   // ===== 导出接口 =====
   return {
     // 状态
@@ -798,7 +810,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     pdfFiles,
     pdfDirectoryHandle,
     currentFileName,
-    
+
     // 计算属性
     currentSample,
     totalSamples,
@@ -811,7 +823,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     selectedElement,
     pdfStats,
     currentFileInfo,
-    
+
     // 核心操作
     loadJSONL,
     setSamples,
@@ -821,30 +833,30 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     reorderElements,
     updatePageInfo,
     resetCurrentSample,
-    
+
     // PDF文件管理
     selectPDFFolder,
     uploadPDFFiles,
     getPDFFile,
     getPDFFileWithCache,
     removePDFFile,
-    
+
     // 编辑历史
     addToHistory,
     executeHistoryAction,
     undo,
     redo,
     clearHistory,
-    
+
     // 导航操作
     navigateTo,
     nextSample,
     prevSample,
-    
+
     // 选择操作
     selectElement,
     setViewMode,
-    
+
     // 数据操作
     exportData,
     resetModificationStatus,
@@ -852,7 +864,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     getStateSnapshot,
     restoreFromSnapshot,
     updateModificationStatus,
-    
+
     // 持久化操作
     saveToLocalStorage,
     loadFromLocalStorage,
