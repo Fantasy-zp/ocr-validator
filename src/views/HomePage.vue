@@ -102,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -120,6 +120,21 @@ const router = useRouter()
 const fileManagerStore = useFileManagerStore()
 const datasetStore = useDatasetStore()
 const ocrStore = useOCRValidationStore()
+
+// 在组件挂载时确保OCR数据已加载
+  onMounted(async () => {
+    try {
+      // 确保OCR数据从本地存储加载
+      await ocrStore.loadFromLocalStorage()
+      
+      // 如果有当前文件，同步到datasetStore
+      if (fileManagerStore.currentFile) {
+        datasetStore.setSamples(fileManagerStore.currentFile.samples, fileManagerStore.currentFile.currentIndex)
+      }
+    } catch {
+      console.error('加载数据时出错')
+    }
+  })
 
 // 统计数据
 const totalFiles = computed(() => {
