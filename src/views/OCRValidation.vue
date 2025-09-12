@@ -171,12 +171,21 @@ const handleJSONLUpload = async (file: File) => {
     const result = JSONLParser.parseOCRJSONL(text)
 
     if (result.success) {
-      ocrStore.samples = result.samples
-      ocrStore.currentIndex = 0
-      ocrStore.selectedElementIndex = null
-      ocrStore.modifiedSamples.clear()
-      ocrStore.editHistory = []
-      ocrStore.historyIndex = -1
+      // 在调用loadJSONL之前检查文件名是否重复
+      if (ocrStore.currentFileName === file.name) {
+        ElMessage.warning('文件名已存在，请先重命名后再上传')
+        return false
+      }
+
+      // 传入文件名
+      ocrStore.loadJSONL(text, file.name)
+      
+      // 这些属性已经在loadJSONL方法内部处理，不需要再次设置
+      // ocrStore.currentIndex = 0
+      // ocrStore.selectedElementIndex = null
+      // ocrStore.modifiedSamples.clear()
+      // ocrStore.editHistory = []
+      // ocrStore.historyIndex = -1
 
       ElMessage.success(`成功加载 ${result.count} 条数据`)
 
@@ -283,6 +292,8 @@ const handleExport = () => {
 
 onMounted(() => {
   setupKeyboardShortcuts()
+  // 从本地存储加载数据，确保页面刷新后能恢复状态
+  ocrStore.loadFromLocalStorage()
 })
 
 onUnmounted(() => {

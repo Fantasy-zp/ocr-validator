@@ -116,7 +116,11 @@ const datasetStore = useDatasetStore()
 const ocrStore = useOCRValidationStore()
 
 // 统计数据
-const totalFiles = computed(() => fileManagerStore.fileList.length)
+const totalFiles = computed(() => {
+  // 合并页面的文件数 + OCR页面的文件数(0或1)
+  let ocrFileCount = ocrStore.currentFileName ? 1 : 0
+  return fileManagerStore.fileList.length + ocrFileCount
+})
 const totalSamples = computed(() => datasetStore.totalSamples + ocrStore.totalSamples)
 const modifiedSamples = computed(() => datasetStore.modifiedCount + ocrStore.modifiedCount)
 
@@ -131,7 +135,8 @@ const handleQuickUpload = async (file: File) => {
     const text = await file.text()
 
     // 检查是否存在同名文件
-    const hasDuplicate = fileManagerStore.fileList.some(f => f.name === file.name)
+    const hasDuplicate = fileManagerStore.fileList.some(f => f.name === file.name) || 
+                        (ocrStore.currentFileName && ocrStore.currentFileName === file.name)
     if (hasDuplicate) {
       ElMessage.warning('文件名已存在，请先重命名后再上传')
       return false
@@ -149,7 +154,7 @@ const handleQuickUpload = async (file: File) => {
       setTimeout(() => navigateTo('/merge-validation'), 1000)
     } else if (sample.pdf_name && sample.layout_dets) {
       // OCR校验格式
-      const result = ocrStore.loadJSONL(text)
+      const result = ocrStore.loadJSONL(text, file.name)
       if (result.success) {
         ElMessage.success('检测到OCR校验数据，正在跳转...')
         setTimeout(() => navigateTo('/ocr-validation'), 1000)
