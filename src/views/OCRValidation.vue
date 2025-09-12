@@ -28,6 +28,10 @@
       @export="handleExport"
     >
       <template #extra-actions>
+        <el-button @click="$router.push('/')" :icon="HomeFilled">
+          返回首页
+        </el-button>
+        
         <el-upload
           :show-file-list="false"
           :before-upload="handlePDFUpload"
@@ -111,6 +115,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   DocumentAdd,
   FolderOpened,
+  HomeFilled,
   UploadFilled
 } from '@element-plus/icons-vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'

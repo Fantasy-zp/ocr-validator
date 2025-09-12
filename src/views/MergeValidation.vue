@@ -22,6 +22,10 @@
       @export="handleExport"
     >
       <template #extra-actions>
+        <el-button @click="$router.push('/')" :icon="HomeFilled">
+          返回首页
+        </el-button>
+        
         <el-button @click="fileManagerStore.toggleFileList" :icon="FolderOpened">
           文件管理
         </el-button>
@@ -75,7 +79,7 @@
 <script setup lang="ts">
 import { watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { FolderOpened, UploadFilled } from '@element-plus/icons-vue'
+import { FolderOpened, HomeFilled, UploadFilled } from '@element-plus/icons-vue'
 import { useDatasetStore } from '@/stores/dataset'
 import { useEditorStore } from '@/stores/editor'
 import { useFileManagerStore } from '@/stores/fileManager'

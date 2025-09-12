@@ -130,12 +130,19 @@ const handleQuickUpload = async (file: File) => {
   try {
     const text = await file.text()
 
+    // 检查是否存在同名文件
+    const hasDuplicate = fileManagerStore.fileList.some(f => f.name === file.name)
+    if (hasDuplicate) {
+      ElMessage.warning('文件名已存在，请先重命名后再上传')
+      return false
+    }
+
     // 尝试解析第一行来判断数据格式
     const firstLine = text.trim().split('\n')[0]
     const sample = JSON.parse(firstLine)
 
-    // 检查是否为合并校验格式
-    if (sample.pdf_name_1 && sample.pdf_name_2 && sample.merging_idx_pairs) {
+    // 检查是否为合并校验格式 (Sample类型)
+    if (sample.pdf_name_1 && sample.pdf_name_2 && 'merging_idx_pairs' in sample) {
       // 合并校验格式
       fileManagerStore.addFile(file.name, text)
       ElMessage.success('检测到合并校验数据，正在跳转...')
