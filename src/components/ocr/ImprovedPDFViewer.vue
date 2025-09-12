@@ -249,6 +249,15 @@ watch(() => props.pdfName, (newName) => {
   }
 })
 
+// 监听PDF文件夹变化，在选择文件夹后自动重试加载PDF
+watch(() => ocrStore.pdfDirectoryHandle, async (newHandle) => {
+  if (newHandle && props.pdfName && error.value) {
+    // 如果有错误且文件夹已选择，自动重试加载PDF
+    console.log('检测到PDF文件夹变化，自动重试加载PDF:', props.pdfName);
+    await loadPDF();
+  }
+})
+
 onMounted(() => {
   if (props.pdfName) {
     loadPDF()

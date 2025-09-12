@@ -249,10 +249,10 @@ const handleExport = () => {
   ElMessage.success(`成功导出 ${ocrStore.totalSamples} 条数据`)
 }
 
-onMounted(() => {
+onMounted(async () => {
   setupKeyboardShortcuts()
   // 从本地存储加载数据，确保页面刷新后能恢复状态
-  ocrStore.loadFromLocalStorage()
+  await ocrStore.loadFromLocalStorage()
 })
 
 onUnmounted(() => {

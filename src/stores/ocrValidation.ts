@@ -54,7 +54,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   /**
    * 保存OCR数据到本地存储
    */
-  function saveToLocalStorage() {
+  async function saveToLocalStorage() {
     try {
       // File对象无法直接序列化，所以只保存文件名
       const pdfFileNames = Array.from(pdfFiles.value.keys())
@@ -64,11 +64,21 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         currentIndex: currentIndex.value,
         currentFileName: currentFileName.value,
         pdfFileNames: pdfFileNames,
-        // 注意：由于File对象无法序列化，这里只保存文件名，不保存文件内容
-        // PDF文件需要用户重新选择
+        hasSelectedPDFDirectory: !!pdfDirectoryHandle.value // 记录是否已选择PDF文件夹
       }
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+
+      // 尝试持久化文件夹句柄（如果存在）
+      if (pdfDirectoryHandle.value) {
+        try {
+          // 浏览器的FileSystem API不支持直接持久化存储目录句柄
+          // 但现代浏览器会记住用户之前的授权选择
+          console.log('PDF文件夹已选择，浏览器将记住此选择（基于浏览器策略）')
+        } catch (err) {
+          console.warn('处理文件夹句柄时出错:', err)
+        }
+      }
     } catch (e) {
       console.error('保存OCR数据失败:', e)
     }
@@ -77,7 +87,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   /**
    * 从本地存储加载OCR数据
    */
-  function loadFromLocalStorage() {
+  async function loadFromLocalStorage() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (!stored) return
@@ -105,11 +115,68 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       // 重新计算所有样本的修改状态，确保修改标记正确显示
       recalculateModifications()
 
+      // 尝试恢复PDF文件夹访问权限
+      try {
+        if ('showDirectoryPicker' in window && data.hasSelectedPDFDirectory) {
+            // 显示提示，告知用户我们正在尝试恢复PDF文件夹访问权限
+            console.log('尝试恢复PDF文件夹访问权限...');
+            
+            // 请求文件夹访问权限，但不强制选择，只是提示用户
+            setTimeout(async () => {
+              try {
+                // 使用之前的目录作为起始位置
+                // @ts-ignore - showDirectoryPicker是现代浏览器的FileSystem API
+                const persistedHandles = await (window as any).showDirectoryPicker({
+                  mode: 'read',
+                  startIn: 'recently-used'
+                }).catch(() => null);
+                
+                if (persistedHandles) {
+                  // 如果用户确认了访问权限，加载PDF文件
+                  pdfDirectoryHandle.value = persistedHandles;
+                  await loadPDFsFromDirectory(persistedHandles);
+                  console.log('PDF文件夹访问权限已恢复');
+                } else {
+                  console.log('用户未确认PDF文件夹访问权限');
+                }
+              } catch (err) {
+                console.warn('恢复PDF文件夹访问失败:', err);
+                // 失败也没关系，用户可以重新选择
+              }
+            }, 1000); // 延迟1秒，让页面内容先加载完成
+          }
+      } catch (err) {
+        console.warn('恢复PDF文件夹访问失败:', err);
+        // 失败也没关系，用户可以重新选择
+      }
+
       console.log('OCR数据从本地存储加载成功')
     } catch (e) {
       console.error('加载OCR数据失败:', e)
       // 发生错误时清空存储，避免下次加载再次失败
       localStorage.removeItem(STORAGE_KEY)
+    }
+  }
+
+  /**
+   * 从目录句柄加载PDF文件
+   */
+  async function loadPDFsFromDirectory(dirHandle: any) {
+    try {
+      pdfFiles.value.clear();
+      // 使用entries()方法迭代目录内容
+      // @ts-ignore - FileSystemDirectoryHandle在TypeScript定义中可能不包含entries方法
+      for await (const [name, entry] of dirHandle.entries?.() || []) {
+        if (entry.kind === 'file' && name.endsWith('.pdf')) {
+          const file = await entry.getFile();
+          const nameWithoutExt = name.replace('.pdf', '');
+          pdfFiles.value.set(nameWithoutExt, file);
+        }
+      }
+      return pdfFiles.value.size;
+    } catch (error) {
+      console.error('从目录加载PDF文件失败:', error);
+      throw error;
     }
   }
 
@@ -157,9 +224,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // ===== 核心操作方法 =====
 
   /**
-   * 从JSONL文本加载OCR数据
+   * 加载JSONL数据
    */
-  function loadJSONL(text: string, fileName?: string): LoadResult {
+  async function loadJSONL(text: string, fileName?: string): Promise<LoadResult> {
     const result = JSONLParser.parseOCRJSONL(text)
 
     if (result.success) {
@@ -180,7 +247,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       }
 
       // 保存到本地存储
-      saveToLocalStorage()
+      await saveToLocalStorage()
     }
 
     return {
@@ -383,7 +450,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   /**
    * 更新元素
    */
-  function updateElement(index: number, updates: Partial<LayoutElement>) {
+  async function updateElement(index: number, updates: Partial<LayoutElement>) {
     if (!currentSample.value || index < 0 || index >= currentSample.value.layout_dets.length) {
       return false
     }
@@ -405,7 +472,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     modifiedSamples.value.add(currentIndex.value)
 
     // 自动保存数据
-    saveToLocalStorage()
+      await saveToLocalStorage()
 
     return true
   }
@@ -413,7 +480,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   /**
    * 添加元素
    */
-  function addElement(element: LayoutElement) {
+  async function addElement(element: LayoutElement) {
     if (!currentSample.value) return false
 
     // 计算新元素的order
@@ -435,7 +502,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     modifiedSamples.value.add(currentIndex.value)
 
     // 自动保存数据
-    saveToLocalStorage()
+    await saveToLocalStorage()
 
     return true
   }
@@ -443,7 +510,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   /**
    * 删除元素
    */
-  function deleteElement(index: number) {
+  async function deleteElement(index: number) {
     if (!currentSample.value || index < 0 || index >= currentElements.value.length) {
       return false
     }
@@ -470,11 +537,11 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     })
 
     // 删除元素
-  currentSample.value.layout_dets.splice(originalIndex, 1)
-  modifiedSamples.value.add(currentIndex.value)
+    currentSample.value.layout_dets.splice(originalIndex, 1)
+    modifiedSamples.value.add(currentIndex.value)
 
-  // 自动保存数据
-  saveToLocalStorage()
+    // 自动保存数据
+    await saveToLocalStorage()
 
   // 更新选中状态
   if (selectedElementIndex.value === index) {
@@ -664,7 +731,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   /**
    * 更新页面信息
    */
-  function updatePageInfo(updates: Partial<PageInfo>) {
+  async function updatePageInfo(updates: Partial<PageInfo>) {
     if (!currentSample.value) return false
 
     const oldPageInfo = DataUtils.deepClone(currentSample.value.page_info)

@@ -260,8 +260,8 @@ const startEditPageInfo = () => {
 }
 
 // 保存页面信息修改
-const savePageInfo = () => {
-  const success = ocrStore.updatePageInfo(editPageInfoForm)
+const savePageInfo = async () => {
+  const success = await ocrStore.updatePageInfo(editPageInfoForm)
   if (success) {
     ElMessage.success('页面信息已更新')
     isEditingPageInfo.value = false
