@@ -47,7 +47,7 @@ export class FileUtils {
 
       // 检查合并校验格式
       if (firstSample.pdf_name_1 && firstSample.pdf_name_2 &&
-          Array.isArray(firstSample.merging_idx_pairs)) {
+        Array.isArray(firstSample.merging_idx_pairs)) {
         return 'merge'
       }
 
@@ -84,7 +84,7 @@ export class JSONLParser {
   static parseMergeJSONL(text: string): LoadResult & { samples: Sample[] } {
     const lines = text.trim().split('\n').filter(line => line.trim())
     const samples: Sample[] = []
-    const errors: Array<{line: number; error: Error; lineContent?: string}> = []
+    const errors: Array<{ line: number; error: Error; lineContent?: string }> = []
 
     for (let i = 0; i < lines.length; i++) {
       try {
@@ -136,7 +136,7 @@ export class JSONLParser {
   static parseOCRJSONL(text: string): LoadResult & { samples: OCRSample[] } {
     const lines = text.trim().split('\n').filter(line => line.trim())
     const samples: OCRSample[] = []
-    const errors: Array<{line: number; error: Error}> = []
+    const errors: Array<{ line: number; error: Error }> = []
 
     for (let i = 0; i < lines.length; i++) {
       try {
@@ -191,7 +191,13 @@ export class JSONLParser {
    * 导出OCR样本到JSONL
    */
   static exportOCRToJSONL(samples: OCRSample[]): string {
-    return samples.map(sample => JSON.stringify(sample)).join('\n')
+    return samples.map(sample => {
+      // 创建不包含原始数据的样本副本
+      const exportSample = { ...sample }
+      delete exportSample.original_layout_dets
+      delete exportSample.original_page_info
+      return JSON.stringify(exportSample)
+    }).join('\n')
   }
 
   /**
@@ -345,38 +351,38 @@ export class DataUtils {
     const original = JSON.stringify(sample.original_pairs.sort())
     return current !== original
   }
-  
+
   /**
    * 检查OCR样本是否被修改
    */
   static isOCRSampleModified(sample: OCRSample): boolean {
     // 如果没有原始数据，假设没有修改
     if (!sample.original_layout_dets || !sample.original_page_info) return false
-    
+
     // 比较页面信息
     const currentPageInfo = JSON.stringify(sample.page_info)
     const originalPageInfo = JSON.stringify(sample.original_page_info)
     if (currentPageInfo !== originalPageInfo) return true
-    
+
     // 比较布局元素（排序后比较）
     const currentDets = [...sample.layout_dets].sort((a, b) => a.order - b.order)
     const originalDets = [...sample.original_layout_dets].sort((a, b) => a.order - b.order)
-    
+
     if (currentDets.length !== originalDets.length) return true
-    
+
     // 比较每个元素
     for (let i = 0; i < currentDets.length; i++) {
       const current = currentDets[i]
       const original = originalDets[i]
-      
+
       // 比较关键属性
       if (current.category_type !== original.category_type ||
-          current.text !== original.text ||
-          !this.arraysEqual(current.poly, original.poly)) {
+        current.text !== original.text ||
+        !this.arraysEqual(current.poly, original.poly)) {
         return true
       }
     }
-    
+
     return false
   }
 }
@@ -420,7 +426,7 @@ export class KeyboardManager {
 
     // 如果焦点在输入框上，忽略快捷键
     if (document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement) {
+      document.activeElement instanceof HTMLTextAreaElement) {
       return
     }
 

@@ -1,15 +1,14 @@
 <template>
   <div class="ocr-content-panel">
     <div class="panel-header">
-      <el-radio-group :model-value="viewMode" @update:model-value="$emit('update:view-mode', $event)" size="small">
-        <el-radio-button label="rendered">渲染效果</el-radio-button>
-        <el-radio-button label="original">原始内容</el-radio-button>
-        <el-radio-button label="json">JSON</el-radio-button>
-      </el-radio-group>
-
-      <el-tag size="small" type="info">
-        {{ elements.length }} 个元素
-      </el-tag>
+      <div class="header-actions">
+        <el-button type="primary" size="small" @click="sortElementsByOrder">
+          按顺序排序
+        </el-button>
+        <el-tag size="small" type="info">
+          {{ elements.length }} 个元素
+        </el-tag>
+      </div>
     </div>
 
     <div class="elements-container" ref="containerRef">
@@ -31,9 +30,39 @@
 
       <!-- 普通列表（元素少于100个） -->
       <div v-else class="normal-list">
-        <OCRElementCard v-for="(elem, idx) in elements" :key="idx" :element="elem" :index="idx" :view-mode="viewMode"
-          :is-selected="selectedIndex === idx" @click="handleElementClick(idx)" @edit="handleElementEdit(idx, $event)"
-          @delete="handleElementDelete(idx)" />
+        <div
+          v-for="(elem, idx) in elements"
+          :key="idx"
+          class="draggable-item"
+          :draggable="true"
+          @dragstart="handleDragStart(idx)"
+          @dragover.prevent="handleDragOver(idx)"
+          @drop="handleDrop(idx)"
+        >
+          <OCRElementCard 
+            :element="elem" 
+            :index="idx" 
+            :view-mode="viewMode"
+            :is-selected="selectedIndex === idx" 
+            @click="handleElementClick(idx)" 
+            @edit="handleElementEdit(idx, $event)" 
+            @delete="handleElementDelete(idx)" 
+          />
+          <div class="move-controls">
+            <el-button 
+              icon="el-icon-top" 
+              size="mini" 
+              @click.stop="moveElementUp(idx)"
+              :disabled="idx === 0"
+            />
+            <el-button 
+              icon="el-icon-bottom" 
+              size="mini" 
+              @click.stop="moveElementDown(idx)"
+              :disabled="idx === elements.length - 1"
+            />
+          </div>
+        </div>
       </div>
     </div>
 
@@ -107,13 +136,11 @@
           <el-switch v-else v-model="editPageInfoForm.is_table" size="small" />
         </div>
         <div class="info-item">
-          <span class="info-label">包含图表：</span>
+          <span class="info-label">页面类型：</span>
           <span class="info-value" v-if="!isEditingPageInfo">
-            <el-tag size="small" :type="pageInfo.is_diagram ? 'success' : ''">
-              {{ pageInfo.is_diagram ? '是' : '否' }}
-            </el-tag>
+            {{ pageInfo.page_type || '未设置' }}
           </span>
-          <el-switch v-else v-model="editPageInfoForm.is_diagram" size="small" />
+          <el-input v-else v-model="editPageInfoForm.page_type" placeholder="请输入页面类型" size="small" />
         </div>
       </div>
     </div>
@@ -121,67 +148,42 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, reactive } from 'vue'
-import type { LayoutElement, OCRViewMode, PageInfo } from '@/types'
-import OCRElementCard from '@/components/ocr/OCRElementCard.vue'
+import { ref, computed, watch } from 'vue'
+import { ElMessage, ElTag, ElButton, ElSwitch, ElInput, ElSelect, ElOption } from 'element-plus'
+import OCRElementCard from './OCRElementCard.vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
-import { ElMessage } from 'element-plus'
-
-const ocrStore = useOCRValidationStore()
+import type { OCRElement, OCRPageInfo } from '@/types'
 
 const props = defineProps<{
-  elements: LayoutElement[]
-  viewMode: OCRViewMode
+  elements: OCRElement[]
+  pageInfo?: OCRPageInfo
   selectedIndex: number | null
-  pageInfo?: PageInfo | null
+  viewMode: 'edit' | 'preview'
 }>()
 
 const emit = defineEmits<{
-  'update:view-mode': [mode: OCRViewMode]
   'element-click': [index: number]
-  'element-edit': [index: number, element: Partial<LayoutElement>]
+  'element-edit': [index: number, element: OCRElement]
   'element-delete': [index: number]
 }>()
 
-const containerRef = ref<HTMLDivElement>();
-
-// 页面信息编辑状态
+const ocrStore = useOCRValidationStore()
+const containerRef = ref<HTMLElement>()
 const isEditingPageInfo = ref(false)
-const editPageInfoForm = reactive<PageInfo>({
-  language: 'zh',
-  fuzzy_scan: false,
-  watermark: false,
-  rotate: 'normal',
-  is_table: false,
-  is_diagram: false
-})
+const editPageInfoForm = ref<OCRPageInfo>({ ...props.pageInfo })
+const draggedElementIndex = ref<number | null>(null)
 
-// 虚拟滚动配置
-const virtualColumns = [
+// 虚拟滚动的列定义
+const virtualColumns = computed(() => [
   {
-    key: 'element',
-    dataKey: 'element',
-    width: '100%'
+    key: 'content',
+    dataKey: 'content',
+    width: 1000,
+    align: 'left'
   }
-]
+])
 
-const virtualData = computed(() =>
-  props.elements.map((elem, idx) => ({
-    id: idx,
-    element: elem
-  }))
-)
-
-// 获取旋转状态文本
-const getRotateText = (rotate: string) => {
-  const rotateMap: Record<string, string> = {
-    'normal': '正常',
-    'rotate90': '90',
-    'rotate180': '180',
-    'rotate270': '270'
-  }
-  return rotateMap[rotate] || '未知'
-}
+const virtualData = computed(() => props.elements)
 
 // 处理元素点击
 const handleElementClick = (index: number) => {
@@ -189,7 +191,7 @@ const handleElementClick = (index: number) => {
 }
 
 // 处理元素编辑
-const handleElementEdit = (index: number, element: Partial<LayoutElement>) => {
+const handleElementEdit = (index: number, element: OCRElement) => {
   emit('element-edit', index, element)
 }
 
@@ -202,14 +204,14 @@ const handleElementDelete = (index: number) => {
 const startEditPageInfo = () => {
   if (props.pageInfo) {
     // 复制当前页面信息到编辑表单
-    Object.assign(editPageInfoForm, props.pageInfo)
+    Object.assign(editPageInfoForm.value, props.pageInfo)
     isEditingPageInfo.value = true
   }
 }
 
 // 保存页面信息修改
 const savePageInfo = async () => {
-  const success = await ocrStore.updatePageInfo(editPageInfoForm)
+  const success = await ocrStore.updatePageInfo(editPageInfoForm.value)
   if (success) {
     ElMessage.success('页面信息已更新')
     isEditingPageInfo.value = false
@@ -221,6 +223,17 @@ const savePageInfo = async () => {
 // 取消编辑页面信息
 const cancelEditPageInfo = () => {
   isEditingPageInfo.value = false
+}
+
+// 获取旋转文本
+const getRotateText = (rotate: string) => {
+  const rotateMap: Record<string, string> = {
+    normal: '0°',
+    rotate90: '90°',
+    rotate180: '180°',
+    rotate270: '270°'
+  }
+  return rotateMap[rotate] || rotate
 }
 
 // 监听选中元素变化，滚动到对应位置
@@ -235,94 +248,170 @@ watch(() => props.selectedIndex, (index) => {
     }
   }
 })
+
+// 排序元素
+const sortElementsByOrder = () => {
+  const success = ocrStore.reorderElements()
+  if (success) {
+    ElMessage.success('元素已按顺序重新排序')
+  } else {
+    ElMessage.error('排序失败，请重试')
+  }
+}
+
+// 拖拽排序相关方法
+const handleDragStart = (index: number) => {
+  draggedElementIndex.value = index
+}
+
+const handleDragOver = (index: number) => {
+  // 防止默认行为以允许放置
+}
+
+const handleDrop = (dropIndex: number) => {
+  if (draggedElementIndex.value !== null && draggedElementIndex.value !== dropIndex) {
+    const newOrder = [...Array(props.elements.length).keys()]
+    const draggedIndex = draggedElementIndex.value
+    
+    // 移除被拖拽的元素
+    newOrder.splice(draggedIndex, 1)
+    // 在目标位置插入
+    newOrder.splice(dropIndex, 0, draggedIndex)
+    
+    // 调用reorderElements函数应用新的顺序
+    const success = ocrStore.reorderElements(newOrder)
+    if (success) {
+      ElMessage.success('元素顺序已更新')
+    } else {
+      ElMessage.error('更新元素顺序失败')
+    }
+  }
+  draggedElementIndex.value = null
+}
+
+// 向上移动元素
+const moveElementUp = (index: number) => {
+  if (index > 0) {
+    const newOrder = [...Array(props.elements.length).keys()]
+    // 交换位置
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
+    
+    const success = ocrStore.reorderElements(newOrder)
+    if (success) {
+      ElMessage.success('元素已向上移动')
+    }
+  }
+}
+
+// 向下移动元素
+const moveElementDown = (index: number) => {
+  if (index < props.elements.length - 1) {
+    const newOrder = [...Array(props.elements.length).keys()]
+    // 交换位置
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
+    
+    const success = ocrStore.reorderElements(newOrder)
+    if (success) {
+      ElMessage.success('元素已向下移动')
+    }
+  }
+}
 </script>
 
-<style lang="scss" scoped>
+<style scoped lang="scss">
 .ocr-content-panel {
-  height: 100%;
   display: flex;
   flex-direction: column;
-
+  height: 100%;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  
   .panel-header {
-    padding: 16px 20px;
-    background: white;
-    border-bottom: 1px solid #e4e7ed;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 16px;
+    
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
   }
-
+  
   .elements-container {
     flex: 1;
     overflow-y: auto;
-    background: #f5f7fa;
-
+    margin-bottom: 16px;
+    
     .normal-list {
-      padding: 20px;
-    }
-
-    .virtual-list {
-      height: 100%;
-      padding: 0;
-    }
-
-    &::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: #c0c4cc;
-      border-radius: 4px;
-
-      &:hover {
-        background: #909399;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      
+      .draggable-item {
+        position: relative;
+        
+        &:hover {
+          .move-controls {
+            display: flex;
+          }
+        }
+        
+        .move-controls {
+          display: none;
+          position: absolute;
+          right: -40px;
+          top: 50%;
+          transform: translateY(-50%);
+          flex-direction: column;
+          gap: 4px;
+          z-index: 10;
+        }
       }
     }
   }
-
+  
   .page-info-panel {
-    background: white;
-    border-top: 1px solid #e4e7ed;
-    padding: 16px 20px;
-
+    padding: 16px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    
     .panel-info-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+      
+      h4 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 500;
+      }
     }
-
-    h4 {
-      margin: 0;
-      color: #303133;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
+    
     .info-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 8px 20px;
-    }
-
-    .info-item {
-      display: flex;
-      align-items: center;
-      font-size: 13px;
-
-      .info-label {
-        color: #909399;
-        margin-right: 4px;
-        min-width: 60px;
-      }
-
-      .info-value {
-        color: #303133;
-        font-weight: 400;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      
+      .info-item {
+        display: flex;
+        align-items: center;
+        
+        .info-label {
+          font-size: 14px;
+          color: #606266;
+          margin-right: 8px;
+          min-width: 60px;
+        }
+        
+        .info-value {
+          font-size: 14px;
+          color: #303133;
+        }
       }
     }
   }

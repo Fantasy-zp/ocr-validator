@@ -27,7 +27,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   const pdfFiles = ref<Map<string, File>>(new Map())
   const pdfDirectoryHandle = ref<FileSystemDirectoryHandle | null>(null)
   // PDF文件缓存，用于优化性能
-  const pdfFileCache = ref<Map<string, {file: File, lastAccessed: number}>>(new Map())
+  const pdfFileCache = ref<Map<string, { file: File, lastAccessed: number }>>(new Map())
   const maxCacheSize = ref(50) // 限制缓存大小，可根据需要调整
 
   // 当前JSONL文件名
@@ -194,52 +194,52 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       // 尝试恢复PDF文件夹句柄
       try {
         if ('showDirectoryPicker' in window && data.hasSelectedPDFDirectory) {
-            // 显示提示，告知用户我们正在尝试恢复PDF文件夹访问权限
-            console.log('尝试恢复PDF文件夹访问权限...');
+          // 显示提示，告知用户我们正在尝试恢复PDF文件夹访问权限
+          console.log('尝试恢复PDF文件夹访问权限...');
 
-            // 延迟执行，让页面内容先加载完成
-            setTimeout(async () => {
-              try {
-                // 尝试从IndexedDB获取持久化的目录句柄
-                const savedHandle = await fileSystemDB.getHandle()
+          // 延迟执行，让页面内容先加载完成
+          setTimeout(async () => {
+            try {
+              // 尝试从IndexedDB获取持久化的目录句柄
+              const savedHandle = await fileSystemDB.getHandle()
 
-                if (savedHandle) {
-                  try {
-                    // 验证权限
-                    // @ts-expect-error - queryPermission方法存在于现代浏览器的FileSystemDirectoryHandle实现中
-                    const permission = await savedHandle.queryPermission({ mode: 'read' })
+              if (savedHandle) {
+                try {
+                  // 验证权限
+                  // @ts-expect-error - queryPermission方法存在于现代浏览器的FileSystemDirectoryHandle实现中
+                  const permission = await savedHandle.queryPermission({ mode: 'read' })
 
-                    if (permission === 'granted') {
-                      // 权限已授予，直接使用
+                  if (permission === 'granted') {
+                    // 权限已授予，直接使用
+                    pdfDirectoryHandle.value = savedHandle
+                    await loadPDFsFromDirectory(savedHandle)
+                    console.log('PDF文件夹自动恢复成功')
+                  } else if (permission === 'prompt') {
+                    // 需要重新请求权限
+                    // @ts-expect-error - requestPermission方法存在于现代浏览器的FileSystemDirectoryHandle实现中
+                    const newPermission = await savedHandle.requestPermission({ mode: 'read' })
+
+                    if (newPermission === 'granted') {
                       pdfDirectoryHandle.value = savedHandle
                       await loadPDFsFromDirectory(savedHandle)
-                      console.log('PDF文件夹自动恢复成功')
-                    } else if (permission === 'prompt') {
-                      // 需要重新请求权限
-                      // @ts-expect-error - requestPermission方法存在于现代浏览器的FileSystemDirectoryHandle实现中
-                      const newPermission = await savedHandle.requestPermission({ mode: 'read' })
-
-                      if (newPermission === 'granted') {
-                        pdfDirectoryHandle.value = savedHandle
-                        await loadPDFsFromDirectory(savedHandle)
-                        console.log('PDF文件夹访问权限已恢复')
-                      } else {
-                        console.log('用户未授权PDF文件夹访问权限')
-                      }
+                      console.log('PDF文件夹访问权限已恢复')
+                    } else {
+                      console.log('用户未授权PDF文件夹访问权限')
                     }
-                  } catch (err) {
-                    console.warn('验证或使用已保存的文件夹句柄失败:', err)
-                    // 权限问题，可能需要用户重新选择
                   }
-                } else {
-                  console.log('没有找到保存的PDF文件夹句柄')
+                } catch (err) {
+                  console.warn('验证或使用已保存的文件夹句柄失败:', err)
+                  // 权限问题，可能需要用户重新选择
                 }
-              } catch (err) {
-                console.warn('恢复PDF文件夹访问失败:', err)
-                // 失败也没关系，用户可以重新选择
+              } else {
+                console.log('没有找到保存的PDF文件夹句柄')
               }
-            }, 1000); // 延迟1秒，让页面内容先加载完成
-          }
+            } catch (err) {
+              console.warn('恢复PDF文件夹访问失败:', err)
+              // 失败也没关系，用户可以重新选择
+            }
+          }, 1000); // 延迟1秒，让页面内容先加载完成
+        }
       } catch (err) {
         console.warn('恢复PDF文件夹访问失败:', err)
         // 失败也没关系，用户可以重新选择
@@ -481,7 +481,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     // 如果缓存已满，删除最久未访问的文件
     if (pdfFileCache.value.size >= maxCacheSize.value) {
       const oldest = Array.from(pdfFileCache.value.entries())
-        .sort(([,a], [,b]) => a.lastAccessed - b.lastAccessed)[0]
+        .sort(([, a], [, b]) => a.lastAccessed - b.lastAccessed)[0]
       if (oldest) {
         pdfFileCache.value.delete(oldest[0])
       }
@@ -578,7 +578,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     modifiedSamples.value.add(currentIndex.value)
 
     // 自动保存数据
-      await saveToLocalStorage()
+    await saveToLocalStorage()
 
     return true
   }
@@ -649,14 +649,14 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     // 自动保存数据
     await saveToLocalStorage()
 
-  // 更新选中状态
-  if (selectedElementIndex.value === index) {
-    selectedElementIndex.value = null
-  } else if (selectedElementIndex.value !== null && selectedElementIndex.value > index) {
-    selectedElementIndex.value--
-  }
+    // 更新选中状态
+    if (selectedElementIndex.value === index) {
+      selectedElementIndex.value = null
+    } else if (selectedElementIndex.value !== null && selectedElementIndex.value > index) {
+      selectedElementIndex.value--
+    }
 
-  return true
+    return true
   }
 
   /**
