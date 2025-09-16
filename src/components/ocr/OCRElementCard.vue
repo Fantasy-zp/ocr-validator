@@ -77,6 +77,29 @@
         <el-input-number v-model="editForm.order" :min="0" />
       </el-form-item>
 
+      <el-form-item label="坐标">
+        <div class="coord-pairs">
+          <div class="coord-pair">
+            <!-- <span class="coord-label">左上 (x1,y1):</span> -->
+            <div class="coord-input-group">
+              <span class="coord-input-label">x1: </span>
+              <el-input-number v-model="editForm.poly[0]" :min="0" />
+              <span class="coord-input-label">  y1: </span>
+              <el-input-number v-model="editForm.poly[1]" :min="0" />
+            </div>
+          </div>
+          <div class="coord-pair">
+            <!-- <span class="coord-label">右下 (x2,y2):</span> -->
+            <div class="coord-input-group">
+              <span class="coord-input-label">x2: </span>
+              <el-input-number v-model="editForm.poly[2]" :min="0" />
+              <span class="coord-input-label">  y2: </span>
+              <el-input-number v-model="editForm.poly[3]" :min="0" />
+            </div>
+          </div>
+        </div>
+      </el-form-item>
+
       <el-form-item label="内容" v-if="editForm.category_type === 'table'">
         <el-input
           v-model="editForm.html"
@@ -128,11 +151,13 @@ const editForm = reactive<{
   text: string
   html: string
   order: number
+  poly: [number, number, number, number]
 }>({
   category_type: 'text',
   text: '',
   html: '',
-  order: 0
+  order: 0,
+  poly: [0, 0, 0, 0]
 })
 
 // 获取类型标签颜色
@@ -155,6 +180,12 @@ const handleEdit = () => {
   editForm.text = props.element.text || ''
   editForm.html = props.element.html || ''
   editForm.order = props.element.order
+  // 确保poly始终是一个包含4个数字的元组
+  const originalPoly = props.element.poly || [0, 0, 0, 0]
+  editForm.poly[0] = originalPoly[0] || 0
+  editForm.poly[1] = originalPoly[1] || 0
+  editForm.poly[2] = originalPoly[2] || 0
+  editForm.poly[3] = originalPoly[3] || 0
   editDialogVisible.value = true
 }
 
@@ -162,7 +193,9 @@ const handleEdit = () => {
 const confirmEdit = () => {
   const updates: Partial<LayoutElement> = {
     category_type: editForm.category_type as ElementType,
-    order: editForm.order
+    order: editForm.order,
+    // 确保poly是一个包含4个数字的元组
+    poly: [editForm.poly[0], editForm.poly[1], editForm.poly[2], editForm.poly[3]]
   }
 
   if (editForm.category_type === 'table') {
@@ -312,6 +345,41 @@ const confirmEdit = () => {
     .coord-info {
       font-family: 'Courier New', monospace;
     }
+  }
+
+  .coord-pairs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .coord-pair {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .coord-label {
+    font-size: 14px;
+    color: #606266;
+    min-width: 80px;
+  }
+
+  .coord-input-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+  }
+
+  .coord-input-label {
+    font-size: 14px;
+    color: #606266;
+    min-width: 20px;
+  }
+
+  .coord-input-group .el-input-number {
+    width: 100px;
   }
 }
 </style>

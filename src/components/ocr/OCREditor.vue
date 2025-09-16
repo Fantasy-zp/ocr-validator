@@ -62,11 +62,24 @@
 
           <el-col :span="12">
             <el-form-item label="坐标">
-              <el-input
-                :value="`[${selectedElement.poly.join(', ')}]`"
-                disabled
-                placeholder="坐标为只读"
-              />
+              <el-row :gutter="10">
+                <el-col :span="6" style="display: flex; align-items: center;">
+                  <span style="margin-right: 5px;">x1:</span>
+                  <el-input-number v-model="editForm.poly[0]" :min="0" style="flex: 1;" />
+                </el-col>
+                <el-col :span="6" style="display: flex; align-items: center;">
+                  <span style="margin-right: 5px;">y1:</span>
+                  <el-input-number v-model="editForm.poly[1]" :min="0" style="flex: 1;" />
+                </el-col>
+                <el-col :span="6" style="display: flex; align-items: center;">
+                  <span style="margin-right: 5px;">x2:</span>
+                  <el-input-number v-model="editForm.poly[2]" :min="0" style="flex: 1;" />
+                </el-col>
+                <el-col :span="6" style="display: flex; align-items: center;">
+                  <span style="margin-right: 5px;">y2:</span>
+                  <el-input-number v-model="editForm.poly[3]" :min="0" style="flex: 1;" />
+                </el-col>
+              </el-row>
             </el-form-item>
           </el-col>
         </el-row>
@@ -206,11 +219,13 @@ const editForm = reactive<{
   text: string
   html: string
   order: number
+  poly: [number, number, number, number]
 }>({
   category_type: 'text',
   text: '',
   html: '',
-  order: 0
+  order: 0,
+  poly: [0, 0, 0, 0]
 })
 
 // 新元素表单
@@ -232,6 +247,10 @@ watch(selectedElement, (elem) => {
     editForm.text = elem.text || ''
     editForm.html = elem.html || ''
     editForm.order = elem.order
+    editForm.poly[0] = elem.poly[0] || 0
+    editForm.poly[1] = elem.poly[1] || 0
+    editForm.poly[2] = elem.poly[2] || 0
+    editForm.poly[3] = elem.poly[3] || 0
   }
 })
 
@@ -241,7 +260,8 @@ const applyChanges = () => {
 
   const updates: Partial<LayoutElement> = {
     category_type: editForm.category_type,
-    order: editForm.order
+    order: editForm.order,
+    poly: [editForm.poly[0], editForm.poly[1], editForm.poly[2], editForm.poly[3]]
   }
 
   if (editForm.category_type === 'table') {
@@ -263,6 +283,10 @@ const resetForm = () => {
     editForm.text = selectedElement.value.text || ''
     editForm.html = selectedElement.value.html || ''
     editForm.order = selectedElement.value.order
+    editForm.poly[0] = selectedElement.value.poly[0] || 0
+    editForm.poly[1] = selectedElement.value.poly[1] || 0
+    editForm.poly[2] = selectedElement.value.poly[2] || 0
+    editForm.poly[3] = selectedElement.value.poly[3] || 0
   }
 }
 

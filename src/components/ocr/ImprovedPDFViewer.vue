@@ -13,6 +13,9 @@
 
       <el-checkbox v-model="showBoundingBoxes">显示边框</el-checkbox>
       <el-checkbox v-model="showLabels">显示标签</el-checkbox>
+      <el-tag v-if="pdfName" type="info" class="pdf-name-tag">
+        {{ pdfName }}
+      </el-tag>
     </div>
 
     <div class="viewer-container" ref="containerRef">
@@ -180,7 +183,7 @@ const loadPDF = async () => {
 
   } catch (err: unknown) {
     console.error('PDF加载失败:', err)
-    
+
     // 判断是否需要自动重试
     if (retryAttempts < maxRetryAttempts && ocrStore.pdfDirectoryHandle === null) {
       // 如果没有目录句柄且重试次数未达到上限，尝试自动重试
@@ -196,7 +199,7 @@ const loadPDF = async () => {
 
       return
     }
-    
+
     // 显示友好的错误信息
     if (ocrStore.pdfDirectoryHandle === null) {
       error.value = '正在等待PDF文件夹选择...'
@@ -433,5 +436,12 @@ onUnmounted(() => {
 
 .mt-10 {
   margin-top: 10px;
+}
+
+.pdf-name-tag {
+  max-width: 700px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
