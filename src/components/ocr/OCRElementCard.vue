@@ -34,21 +34,16 @@
     </div>
 
     <div class="card-content">
-      <!-- 渲染模式 -->
-      <div v-if="viewMode === 'rendered'" class="content-rendered">
+      <!-- 预览模式 -->
+      <div v-if="viewMode === 'preview'" class="content-rendered">
         <div v-if="element.html" v-html="element.html" class="html-content"></div>
         <div v-else-if="element.text" class="text-content">{{ element.text }}</div>
         <div v-else class="empty-content">（无内容）</div>
       </div>
 
-      <!-- 原始模式 -->
-      <div v-else-if="viewMode === 'original'" class="content-original">
+      <!-- 编辑模式 -->
+      <div v-else-if="viewMode === 'edit'" class="content-original">
         <pre class="original-text">{{ element.text || element.html || '（无内容）' }}</pre>
-      </div>
-
-      <!-- JSON模式 -->
-      <div v-else-if="viewMode === 'json'" class="content-json">
-        <pre class="json-text">{{ JSON.stringify(element, null, 2) }}</pre>
       </div>
     </div>
 
@@ -111,12 +106,12 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { Edit, Delete } from '@element-plus/icons-vue'
-import type { LayoutElement, OCRViewMode, ElementType } from '@/types'
+import type { LayoutElement, ElementType } from '@/types'
 
 const props = defineProps<{
   element: LayoutElement
   index: number
-  viewMode: OCRViewMode
+  viewMode: 'edit' | 'preview'
   isSelected: boolean
 }>()
 
@@ -128,7 +123,12 @@ const emit = defineEmits<{
 
 // 编辑对话框
 const editDialogVisible = ref(false)
-const editForm = reactive<Partial<LayoutElement>>({
+const editForm = reactive<{
+  category_type: ElementType
+  text: string
+  html: string
+  order: number
+}>({
   category_type: 'text',
   text: '',
   html: '',

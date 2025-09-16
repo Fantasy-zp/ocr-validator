@@ -51,13 +51,13 @@
           <div class="move-controls">
             <el-button 
               icon="el-icon-top" 
-              size="mini" 
+              size="small" 
               @click.stop="moveElementUp(idx)"
               :disabled="idx === 0"
             />
             <el-button 
               icon="el-icon-bottom" 
-              size="mini" 
+              size="small" 
               @click.stop="moveElementDown(idx)"
               :disabled="idx === elements.length - 1"
             />
@@ -99,7 +99,7 @@
         <div class="info-item">
           <span class="info-label">模糊扫描：</span>
           <span class="info-value" v-if="!isEditingPageInfo">
-            <el-tag size="small" :type="pageInfo.fuzzy_scan ? 'warning' : ''">
+            <el-tag size="small" :type="pageInfo.fuzzy_scan ? 'warning' : undefined">
               {{ pageInfo.fuzzy_scan ? '是' : '否' }}
             </el-tag>
           </span>
@@ -108,7 +108,7 @@
         <div class="info-item">
           <span class="info-label">水印：</span>
           <span class="info-value" v-if="!isEditingPageInfo">
-            <el-tag size="small" :type="pageInfo.watermark ? 'warning' : ''">
+            <el-tag size="small" :type="pageInfo.watermark ? 'warning' : undefined">
               {{ pageInfo.watermark ? '是' : '否' }}
             </el-tag>
           </span>
@@ -129,19 +129,22 @@
         <div class="info-item">
           <span class="info-label">包含表格：</span>
           <span class="info-value" v-if="!isEditingPageInfo">
-            <el-tag size="small" :type="pageInfo.is_table ? 'success' : ''">
+            <el-tag size="small" :type="pageInfo.is_table ? 'success' : undefined">
               {{ pageInfo.is_table ? '是' : '否' }}
             </el-tag>
           </span>
           <el-switch v-else v-model="editPageInfoForm.is_table" size="small" />
         </div>
         <div class="info-item">
-          <span class="info-label">页面类型：</span>
+          <span class="info-label">包含图表：</span>
           <span class="info-value" v-if="!isEditingPageInfo">
-            {{ pageInfo.page_type || '未设置' }}
+            <el-tag size="small" :type="pageInfo.is_diagram ? 'success' : undefined">
+              {{ pageInfo.is_diagram ? '是' : '否' }}
+            </el-tag>
           </span>
-          <el-input v-else v-model="editPageInfoForm.page_type" placeholder="请输入页面类型" size="small" />
+          <el-switch v-else v-model="editPageInfoForm.is_diagram" size="small" />
         </div>
+
       </div>
     </div>
   </div>
@@ -149,28 +152,35 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElTag, ElButton, ElSwitch, ElInput, ElSelect, ElOption } from 'element-plus'
+import { ElMessage, ElTag, ElButton, ElSwitch, ElSelect, ElOption } from 'element-plus'
 import OCRElementCard from './OCRElementCard.vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
-import type { OCRElement, OCRPageInfo } from '@/types'
+import type { LayoutElement, PageInfo } from '@/types'
 
 const props = defineProps<{
-  elements: OCRElement[]
-  pageInfo?: OCRPageInfo
+  elements: LayoutElement[]
+  pageInfo?: PageInfo
   selectedIndex: number | null
   viewMode: 'edit' | 'preview'
 }>()
 
 const emit = defineEmits<{
   'element-click': [index: number]
-  'element-edit': [index: number, element: OCRElement]
+  'element-edit': [index: number, element: Partial<LayoutElement>]
   'element-delete': [index: number]
 }>()
 
 const ocrStore = useOCRValidationStore()
 const containerRef = ref<HTMLElement>()
 const isEditingPageInfo = ref(false)
-const editPageInfoForm = ref<OCRPageInfo>({ ...props.pageInfo })
+const editPageInfoForm = ref<PageInfo>({
+  language: props.pageInfo?.language || 'zh',
+  fuzzy_scan: props.pageInfo?.fuzzy_scan || false,
+  watermark: props.pageInfo?.watermark || false,
+  rotate: props.pageInfo?.rotate || 'normal',
+  is_table: props.pageInfo?.is_table || false,
+  is_diagram: props.pageInfo?.is_diagram || false
+})
 const draggedElementIndex = ref<number | null>(null)
 
 // 虚拟滚动的列定义
@@ -191,7 +201,7 @@ const handleElementClick = (index: number) => {
 }
 
 // 处理元素编辑
-const handleElementEdit = (index: number, element: OCRElement) => {
+const handleElementEdit = (index: number, element: Partial<LayoutElement>) => {
   emit('element-edit', index, element)
 }
 
@@ -264,8 +274,10 @@ const handleDragStart = (index: number) => {
   draggedElementIndex.value = index
 }
 
-const handleDragOver = (index: number) => {
+const handleDragOver = (_index: number) => {
   // 防止默认行为以允许放置
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // _index参数用于满足拖拽API要求，但在当前实现中未使用
 }
 
 const handleDrop = (dropIndex: number) => {
@@ -294,7 +306,9 @@ const moveElementUp = (index: number) => {
   if (index > 0) {
     const newOrder = [...Array(props.elements.length).keys()]
     // 交换位置
-    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
+    const temp = newOrder[index - 1]
+    newOrder[index - 1] = newOrder[index]
+    newOrder[index] = temp
     
     const success = ocrStore.reorderElements(newOrder)
     if (success) {
@@ -308,7 +322,9 @@ const moveElementDown = (index: number) => {
   if (index < props.elements.length - 1) {
     const newOrder = [...Array(props.elements.length).keys()]
     // 交换位置
-    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
+    const temp = newOrder[index]
+    newOrder[index] = newOrder[index + 1]
+    newOrder[index + 1] = temp
     
     const success = ocrStore.reorderElements(newOrder)
     if (success) {

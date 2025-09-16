@@ -35,7 +35,7 @@
 
         <!-- 右侧内容展示 -->
         <div class="content-panel">
-          <OCRContentPanel :elements="ocrStore.currentElements" :view-mode="ocrStore.viewMode"
+          <OCRContentPanel :elements="ocrStore.currentElements" :view-mode="ocrStore.viewMode === 'json' ? 'edit' : 'preview'"
             :selected-index="ocrStore.selectedElementIndex" :page-info="ocrStore.currentSample?.page_info || null"
             @update:view-mode="ocrStore.setViewMode" @element-click="ocrStore.selectElement"
             @element-edit="handleElementEdit" @element-delete="handleElementDelete" />
