@@ -260,8 +260,8 @@ watch(() => props.selectedIndex, (index) => {
 })
 
 // 排序元素
-const sortElementsByOrder = () => {
-  const success = ocrStore.reorderElements()
+const sortElementsByOrder = async () => {
+  const success = await ocrStore.reorderElements()
   if (success) {
     ElMessage.success('元素已按顺序重新排序')
   } else {
@@ -280,7 +280,7 @@ const handleDragOver = (_index: number) => {
   // _index参数用于满足拖拽API要求，但在当前实现中未使用
 }
 
-const handleDrop = (dropIndex: number) => {
+const handleDrop = async (dropIndex: number) => {
   if (draggedElementIndex.value !== null && draggedElementIndex.value !== dropIndex) {
     const newOrder = [...Array(props.elements.length).keys()]
     const draggedIndex = draggedElementIndex.value
@@ -291,7 +291,7 @@ const handleDrop = (dropIndex: number) => {
     newOrder.splice(dropIndex, 0, draggedIndex)
     
     // 调用reorderElements函数应用新的顺序
-    const success = ocrStore.reorderElements(newOrder)
+    const success = await ocrStore.reorderElements(newOrder)
     if (success) {
       ElMessage.success('元素顺序已更新')
     } else {
@@ -302,7 +302,7 @@ const handleDrop = (dropIndex: number) => {
 }
 
 // 向上移动元素
-const moveElementUp = (index: number) => {
+const moveElementUp = async (index: number) => {
   if (index > 0) {
     const newOrder = [...Array(props.elements.length).keys()]
     // 交换位置
@@ -310,7 +310,7 @@ const moveElementUp = (index: number) => {
     newOrder[index - 1] = newOrder[index]
     newOrder[index] = temp
     
-    const success = ocrStore.reorderElements(newOrder)
+    const success = await ocrStore.reorderElements(newOrder)
     if (success) {
       ElMessage.success('元素已向上移动')
     }
@@ -318,7 +318,7 @@ const moveElementUp = (index: number) => {
 }
 
 // 向下移动元素
-const moveElementDown = (index: number) => {
+const moveElementDown = async (index: number) => {
   if (index < props.elements.length - 1) {
     const newOrder = [...Array(props.elements.length).keys()]
     // 交换位置
@@ -326,7 +326,7 @@ const moveElementDown = (index: number) => {
     newOrder[index] = newOrder[index + 1]
     newOrder[index + 1] = temp
     
-    const success = ocrStore.reorderElements(newOrder)
+    const success = await ocrStore.reorderElements(newOrder)
     if (success) {
       ElMessage.success('元素已向下移动')
     }

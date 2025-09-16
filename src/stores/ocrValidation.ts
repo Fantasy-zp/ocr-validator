@@ -133,30 +133,46 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
    */
   async function saveToLocalStorage() {
     try {
-      // File对象无法直接序列化，所以只保存文件名
-      const pdfFileNames = Array.from(pdfFiles.value.keys())
-
-      const data = {
+      // 准备要保存的数据
+      const dataToSave = {
         samples: samples.value,
         currentIndex: currentIndex.value,
+        selectedElementIndex: selectedElementIndex.value,
         currentFileName: currentFileName.value,
-        pdfFileNames: pdfFileNames,
-        hasSelectedPDFDirectory: !!pdfDirectoryHandle.value // 记录是否已选择PDF文件夹
+        pdfFileNames: Array.from(pdfFiles.value.keys()),
+        modifiedSamples: Array.from(modifiedSamples.value),
+        viewMode: viewMode.value,
+        editHistory: editHistory.value,
+        historyIndex: historyIndex.value,
+        hasSelectedPDFDirectory: !!pdfDirectoryHandle.value,
+        lastSavedTimestamp: Date.now()
       }
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+      // 保存到localStorage
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave))
 
-      // 尝试持久化文件夹句柄（如果存在）
+      // 尝试将文件夹句柄保存到IndexedDB（这是一个异步操作）
       if (pdfDirectoryHandle.value) {
         try {
           await fileSystemDB.saveHandle(pdfDirectoryHandle.value)
           console.log('PDF文件夹句柄已保存到IndexedDB')
-        } catch (err) {
-          console.warn('处理文件夹句柄时出错:', err)
+        } catch (dbError) {
+          console.warn('保存文件夹句柄到IndexedDB失败，但不影响主要功能:', dbError)
+          // 不抛出错误，继续执行
         }
       }
-    } catch (e) {
-      console.error('保存OCR数据失败:', e)
+
+      console.log('数据已成功保存到localStorage')
+      return true
+    } catch (error) {
+      console.error('保存数据到localStorage失败:', error)
+      // 提供更详细的错误信息
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        console.error('localStorage存储空间已满，请清除部分数据后重试')
+      } else if (error instanceof Error && error.message.includes('JSON')) {
+        console.error('数据序列化失败，请检查数据格式')
+      }
+      return false
     }
   }
 
@@ -352,20 +368,6 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     }
   }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   /**
    * 撤销操作
    */
@@ -554,145 +556,215 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // ===== 元素操作 =====
 
   /**
-   * 更新元素
+   * 更新元素 - 增强错误处理和类型检查版本
    */
   async function updateElement(index: number, updates: Partial<LayoutElement>) {
     if (!currentSample.value || index < 0 || index >= currentSample.value.layout_dets.length) {
       return false
     }
 
-    const oldElement = DataUtils.deepClone(currentSample.value.layout_dets[index])
-    const newElement = { ...oldElement, ...updates }
+    try {
+      // 增强类型检查
+      if (updates && typeof updates !== 'object') {
+        console.error('更新数据必须是对象类型')
+        return false
+      }
 
-    // 记录编辑历史
-    addToHistory({
-      type: 'modify',
-      elementIndex: index,
-      oldValue: oldElement,
-      newValue: newElement,
-      timestamp: Date.now()
-    })
+      const oldElement = DataUtils.deepClone(currentSample.value.layout_dets[index])
+      const newElement = { ...oldElement, ...updates }
 
-    // 更新元素
-    currentSample.value.layout_dets[index] = newElement
-    modifiedSamples.value.add(currentIndex.value)
+      // 记录编辑历史
+      addToHistory({
+        type: 'modify',
+        elementIndex: index,
+        oldValue: oldElement,
+        newValue: newElement,
+        timestamp: Date.now()
+      })
 
-    // 自动保存数据
-    await saveToLocalStorage()
+      // 更新元素
+      currentSample.value.layout_dets[index] = newElement
+      modifiedSamples.value.add(currentIndex.value)
 
-    return true
+      // 自动保存数据
+      await saveToLocalStorage()
+
+      return true
+    } catch (error) {
+      console.error('更新元素失败:', error)
+      return false
+    }
   }
 
   /**
-   * 添加元素
+   * 添加元素 - 增强错误处理和类型检查版本
    */
   async function addElement(element: LayoutElement) {
     if (!currentSample.value) return false
 
-    // 计算新元素的order
-    const maxOrder = Math.max(
-      0,
-      ...currentSample.value.layout_dets.map(e => e.order || 0)
-    )
-    const newElement = { ...element, order: maxOrder + 1 }
+    try {
+      // 增强类型检查
+      if (!element || typeof element !== 'object' || Array.isArray(element) || !('category_type' in element)) {
+        console.error('无效的元素数据:', element)
+        return false
+      }
 
-    // 记录编辑历史
-    addToHistory({
-      type: 'add',
-      newValue: newElement,
-      timestamp: Date.now()
-    })
+      // 确保poly属性存在且格式正确
+      if (!element.poly || !Array.isArray(element.poly) || element.poly.length !== 4) {
+        element.poly = [0, 0, 100, 100] // 设置默认值
+      }
 
-    // 添加元素
-    currentSample.value.layout_dets.push(newElement)
-    modifiedSamples.value.add(currentIndex.value)
+      // 计算新元素的order
+      const maxOrder = Math.max(
+        0,
+        ...currentSample.value.layout_dets.map(e => e.order || 0)
+      )
+      const newElement = { ...element, order: maxOrder + 1 }
 
-    // 自动保存数据
-    await saveToLocalStorage()
+      // 记录编辑历史
+      addToHistory({
+        type: 'add',
+        newValue: newElement,
+        timestamp: Date.now()
+      })
 
-    return true
+      // 添加元素
+      currentSample.value.layout_dets.push(newElement)
+      modifiedSamples.value.add(currentIndex.value)
+
+      // 自动保存数据
+      await saveToLocalStorage()
+
+      return true
+    } catch (error) {
+      console.error('添加元素失败:', error)
+      return false
+    }
   }
 
   /**
-   * 删除元素
+   * 删除元素 - 修复元素查找逻辑版本
    */
   async function deleteElement(index: number) {
     if (!currentSample.value || index < 0 || index >= currentElements.value.length) {
       return false
     }
 
-    // 获取排序后索引对应的原始元素
-    const elementToDelete = currentElements.value[index]
-    // 找到该元素在原始数组中的位置
-    const originalIndex = currentSample.value.layout_dets.findIndex(el =>
-      el === elementToDelete || (el.order === elementToDelete.order && el.text === elementToDelete.text)
-    )
+    try {
+      // 获取排序后索引对应的原始元素
+      const elementToDelete = currentElements.value[index]
+      
+      // 改进元素查找逻辑，使用更可靠的方式
+      // 创建一个唯一标识符来查找元素
+      const findOriginalElement = () => {
+        // 首先尝试精确匹配引用
+        const exactMatchIndex = currentSample.value.layout_dets.findIndex(el => el === elementToDelete)
+        if (exactMatchIndex !== -1) return exactMatchIndex
+        
+        // 如果引用不匹配，使用多字段组合匹配
+        return currentSample.value.layout_dets.findIndex(el => 
+          el.category_type === elementToDelete.category_type &&
+          el.order === elementToDelete.order &&
+          el.poly.join(',') === elementToDelete.poly.join(',') &&
+          ((el.text && elementToDelete.text && el.text === elementToDelete.text) ||
+           (el.html && elementToDelete.html && el.html === elementToDelete.html))
+        )
+      }
+      
+      const originalIndex = findOriginalElement()
+      
+      if (originalIndex === -1) {
+        console.error('未找到要删除的元素:', elementToDelete)
+        return false
+      }
 
-    if (originalIndex === -1) {
+      const oldElement = currentSample.value.layout_dets[originalIndex]
+
+      // 记录编辑历史
+      addToHistory({
+        type: 'delete',
+        elementIndex: originalIndex,
+        oldValue: oldElement,
+        timestamp: Date.now()
+      })
+
+      // 删除元素
+      currentSample.value.layout_dets.splice(originalIndex, 1)
+      modifiedSamples.value.add(currentIndex.value)
+
+      // 自动保存数据
+      await saveToLocalStorage()
+
+      // 更新选中状态
+      if (selectedElementIndex.value === index) {
+        selectedElementIndex.value = null
+      } else if (selectedElementIndex.value !== null && selectedElementIndex.value > index) {
+        selectedElementIndex.value--
+      }
+
+      return true
+    } catch (error) {
+      console.error('删除元素失败:', error)
       return false
     }
-
-    const oldElement = currentSample.value.layout_dets[originalIndex]
-
-    // 记录编辑历史
-    addToHistory({
-      type: 'delete',
-      elementIndex: originalIndex,
-      oldValue: oldElement,
-      timestamp: Date.now()
-    })
-
-    // 删除元素
-    currentSample.value.layout_dets.splice(originalIndex, 1)
-    modifiedSamples.value.add(currentIndex.value)
-
-    // 自动保存数据
-    await saveToLocalStorage()
-
-    // 更新选中状态
-    if (selectedElementIndex.value === index) {
-      selectedElementIndex.value = null
-    } else if (selectedElementIndex.value !== null && selectedElementIndex.value > index) {
-      selectedElementIndex.value--
-    }
-
-    return true
   }
 
   /**
-   * 重新排序元素
+   * 重新排序元素 - 支持无参数调用
    */
-  function reorderElements(newOrder?: number[]) {
-    if (!currentSample.value) return false
-
-    const elements = currentSample.value.layout_dets
-    const oldElements = DataUtils.deepClone(elements)
-
-    if (newOrder && newOrder.length === elements.length) {
-      // 按指定顺序重排
-      const reorderedElements = newOrder.map(index => elements[index])
-      reorderedElements.forEach((elem, i) => {
-        elem.order = i
-      })
-      currentSample.value.layout_dets = reorderedElements
-    } else {
-      // 按order属性排序
-      elements.sort((a, b) => a.order - b.order)
-      elements.forEach((elem, i) => {
-        elem.order = i
-      })
+  async function reorderElements(newOrder?: number[]) {
+    if (!currentSample.value) {
+      return false
     }
 
-    // 记录编辑历史
-    addToHistory({
-      type: 'reorder',
-      oldValue: oldElements,
-      newValue: DataUtils.deepClone(currentSample.value.layout_dets),
-      timestamp: Date.now()
-    })
+    try {
+      const oldOrder = DataUtils.deepClone(currentSample.value.layout_dets)
+      
+      if (newOrder && Array.isArray(newOrder)) {
+        // 检查新顺序是否有效
+        if (newOrder.length !== currentSample.value.layout_dets.length) {
+          console.error('新顺序数组长度不匹配')
+          return false
+        }
 
-    modifiedSamples.value.add(currentIndex.value)
-    return true
+        // 检查是否包含所有索引
+        const hasAllIndexes = newOrder.every((value, index) => 
+          newOrder.includes(index)
+        )
+        if (!hasAllIndexes) {
+          console.error('新顺序数组包含无效索引')
+          return false
+        }
+
+        // 应用新顺序
+        const reorderedElements = newOrder.map(idx => currentSample.value.layout_dets[idx])
+        currentSample.value.layout_dets = reorderedElements
+      } else {
+        // 按order属性排序（无参数调用时的默认行为）
+        currentSample.value.layout_dets.sort((a, b) => a.order - b.order)
+        currentSample.value.layout_dets.forEach((elem, i) => {
+          elem.order = i
+        })
+      }
+
+      modifiedSamples.value.add(currentIndex.value)
+
+      // 记录编辑历史
+      addToHistory({
+        type: 'reorder',
+        oldValue: oldOrder,
+        newValue: DataUtils.deepClone(currentSample.value.layout_dets),
+        timestamp: Date.now()
+      })
+
+      // 自动保存数据
+      await saveToLocalStorage()
+
+      return true
+    } catch (error) {
+      console.error('重新排序元素失败:', error)
+      return false
+    }
   }
 
   // ===== 历史操作 =====
@@ -718,69 +790,108 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   }
 
   /**
-   * 执行历史动作
+   * 执行历史动作 - 增强类型检查和错误处理版本
    */
   function executeHistoryAction(action: EditAction, direction: 'undo' | 'redo') {
     if (!currentSample.value) return
 
-    switch (action.type) {
-      case 'modify':
-        if (action.elementIndex !== undefined && action.elementIndex >= 0) {
-          // 处理元素修改
-          const targetElement = direction === 'undo' ? action.oldValue : action.newValue
-          if (targetElement && !Array.isArray(targetElement) && 'category_type' in targetElement) {
-            currentSample.value.layout_dets[action.elementIndex] = targetElement
-          }
-        } else if (action.elementIndex === -1) {
-          // 处理页面信息修改
-          const targetPageInfo = direction === 'undo' ? action.oldValue : action.newValue
-          if (targetPageInfo && !Array.isArray(targetPageInfo) && 'language' in targetPageInfo) {
-            currentSample.value.page_info = targetPageInfo
-          }
-        }
-        break
-
-      case 'add':
-        if (direction === 'undo') {
-          // 撤销添加 = 删除元素
-          if (action.newValue && !Array.isArray(action.newValue) && 'category_type' in action.newValue) {
-            const layoutElement = action.newValue
-            const index = currentSample.value.layout_dets.findIndex(
-              elem => elem.order === layoutElement.order && elem.text === layoutElement.text
-            )
-            if (index !== -1) {
-              currentSample.value.layout_dets.splice(index, 1)
+    try {
+      switch (action.type) {
+        case 'modify':
+          if (action.elementIndex !== undefined && action.elementIndex >= 0) {
+            // 处理元素修改
+            const targetElement = direction === 'undo' ? action.oldValue : action.newValue
+            // 增强类型检查
+            if (
+              targetElement && 
+              typeof targetElement === 'object' && 
+              !Array.isArray(targetElement) && 
+              'category_type' in targetElement &&
+              'poly' in targetElement &&
+              Array.isArray((targetElement as LayoutElement).poly)
+            ) {
+              currentSample.value.layout_dets[action.elementIndex] = targetElement as LayoutElement
+            } else {
+              console.warn('无效的元素数据类型:', targetElement)
+            }
+          } else if (action.elementIndex === -1) {
+            // 处理页面信息修改
+            const targetPageInfo = direction === 'undo' ? action.oldValue : action.newValue
+            // 增强类型检查
+            if (
+              targetPageInfo && 
+              typeof targetPageInfo === 'object' && 
+              !Array.isArray(targetPageInfo) && 
+              'language' in targetPageInfo
+            ) {
+              currentSample.value.page_info = targetPageInfo as PageInfo
+            } else {
+              console.warn('无效的页面信息数据类型:', targetPageInfo)
             }
           }
-        } else {
-          // 重做添加 = 重新添加元素
-          if (action.newValue && !Array.isArray(action.newValue) && 'category_type' in action.newValue) {
-            currentSample.value.layout_dets.push(action.newValue)
-          }
-        }
-        break
+          break
 
-      case 'delete':
-        if (action.elementIndex !== undefined && action.oldValue && !Array.isArray(action.oldValue) && 'category_type' in action.oldValue) {
+        case 'add':
           if (direction === 'undo') {
-            // 撤销删除 = 重新插入元素
-            currentSample.value.layout_dets.splice(action.elementIndex, 0, action.oldValue)
+            // 撤销添加 = 删除元素
+            if (
+              action.newValue && 
+              typeof action.newValue === 'object' && 
+              !Array.isArray(action.newValue) && 
+              'category_type' in action.newValue
+            ) {
+              const layoutElement = action.newValue as LayoutElement
+              // 使用改进的查找方法
+              const index = currentSample.value.layout_dets.findIndex(
+                elem => elem.order === layoutElement.order && elem.poly.join(',') === layoutElement.poly.join(',')
+              )
+              if (index !== -1) {
+                currentSample.value.layout_dets.splice(index, 1)
+              }
+            }
           } else {
-            // 重做删除 = 再次删除元素
-            currentSample.value.layout_dets.splice(action.elementIndex, 1)
+            // 重做添加 = 重新添加元素
+            if (
+              action.newValue && 
+              typeof action.newValue === 'object' && 
+              !Array.isArray(action.newValue) && 
+              'category_type' in action.newValue
+            ) {
+              currentSample.value.layout_dets.push(action.newValue as LayoutElement)
+            }
           }
-        }
-        break
+          break
 
-      case 'reorder':
-        if (direction === 'undo' && action.oldValue && Array.isArray(action.oldValue)) {
-          // 撤销重排 = 恢复旧顺序
-          currentSample.value.layout_dets = action.oldValue
-        } else if (direction === 'redo' && action.newValue && Array.isArray(action.newValue)) {
-          // 重做重排 = 应用新顺序
-          currentSample.value.layout_dets = action.newValue
-        }
-        break
+        case 'delete':
+          if (
+            action.elementIndex !== undefined && 
+            action.oldValue && 
+            typeof action.oldValue === 'object' && 
+            !Array.isArray(action.oldValue) && 
+            'category_type' in action.oldValue
+          ) {
+            if (direction === 'undo') {
+              // 撤销删除 = 重新插入元素
+              currentSample.value.layout_dets.splice(action.elementIndex, 0, action.oldValue as LayoutElement)
+            } else {
+              // 重做删除 = 再次删除元素
+              currentSample.value.layout_dets.splice(action.elementIndex, 1)
+            }
+          }
+          break
+
+        case 'reorder':
+          if (direction === 'undo' && action.oldValue && Array.isArray(action.oldValue)) {
+            // 撤销重排 = 恢复旧顺序
+            currentSample.value.layout_dets = action.oldValue as LayoutElement[]
+          } else if (direction === 'redo' && action.newValue && Array.isArray(action.newValue)) {
+            // 重做重排 = 应用新顺序
+            currentSample.value.layout_dets = action.newValue as LayoutElement[]
+          }
+          break
+      }
+    } catch (error) {
+      console.error('执行历史操作失败:', error, 'Action:', action, 'Direction:', direction)
     }
   }
 
@@ -795,25 +906,45 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // ===== 导航操作 =====
 
   /**
-   * 导航到指定样本
+   * 导航到指定样本 - 修复异步保存问题
    */
-  function navigateTo(index: number) {
-    if (index >= 0 && index < samples.value.length) {
+  async function navigateTo(index: number) {
+    if (index >= 0 && index < totalSamples.value) {
+      // 在导航前确保数据已保存
+      await saveToLocalStorage()
       currentIndex.value = index
       selectedElementIndex.value = null
+      return true
     }
+    return false
   }
 
-  function nextSample() {
-    if (currentIndex.value < samples.value.length - 1) {
-      navigateTo(currentIndex.value + 1)
+  /**
+   * 下一个样本 - 修复异步保存问题
+   */
+  async function nextSample() {
+    if (currentIndex.value < totalSamples.value - 1) {
+      // 在导航前确保数据已保存
+      await saveToLocalStorage()
+      currentIndex.value++
+      selectedElementIndex.value = null
+      return true
     }
+    return false
   }
 
-  function prevSample() {
+  /**
+   * 上一个样本 - 修复异步保存问题
+   */
+  async function prevSample() {
     if (currentIndex.value > 0) {
-      navigateTo(currentIndex.value - 1)
+      // 在导航前确保数据已保存
+      await saveToLocalStorage()
+      currentIndex.value--
+      selectedElementIndex.value = null
+      return true
     }
+    return false
   }
 
   // ===== 选择操作 =====
@@ -835,14 +966,14 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // ===== 数据操作 =====
 
   /**
-   * 更新页面信息
+   * 更新页面信息 - 修复异步保存问题
    */
   async function updatePageInfo(updates: Partial<PageInfo>) {
     if (!currentSample.value) return false
-
+  
     const oldPageInfo = DataUtils.deepClone(currentSample.value.page_info)
     const newPageInfo = { ...oldPageInfo, ...updates }
-
+  
     // 记录编辑历史
     addToHistory({
       type: 'modify',
@@ -851,15 +982,21 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       newValue: newPageInfo,
       timestamp: Date.now()
     })
-
-    // 更新页面信息
-    currentSample.value.page_info = newPageInfo
-    modifiedSamples.value.add(currentIndex.value)
-
-    // 自动保存数据
-    saveToLocalStorage()
-
-    return true
+  
+    try {
+      // 更新页面信息
+      currentSample.value.page_info = newPageInfo
+      modifiedSamples.value.add(currentIndex.value)
+  
+      // 自动保存数据（添加await）
+      await saveToLocalStorage()
+      return true
+    } catch (error) {
+      console.error('更新页面信息失败:', error)
+      // 发生错误时恢复原始数据
+      currentSample.value.page_info = oldPageInfo
+      return false
+    }
   }
 
   /**
