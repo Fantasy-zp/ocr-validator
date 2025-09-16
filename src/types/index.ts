@@ -33,13 +33,19 @@ export interface LayoutElement {
 
 // 元素类型枚举
 export type ElementType =
-  | 'text'
-  | 'table'
-  | 'table_caption'
-  | 'table_footnote'
   | 'title'
+  | 'text'
+  | 'footnote'
+  | 'chart_caption'
+  | 'chart'
+  | 'chart_footnote'
+  | 'table_caption'
+  | 'table'
+  | 'table_footnote'
+  | 'page_footnote'
+  | 'figure_caption'
   | 'figure'
-  | 'formula'
+  | 'figure_footnote'
 
 // 页面信息
 export interface PageInfo {
@@ -188,13 +194,19 @@ export class FileProcessingError extends Error {
 
 // 常量定义
 export const ELEMENT_TYPE_COLORS: Record<ElementType, string> = {
-  text: '#409eff',
-  table: '#67c23a',
-  table_caption: '#e6a23c',
-  table_footnote: '#e6a23c',
   title: '#f56c6c',
+  text: '#409eff',
+  footnote: '#409eff',
+  chart_caption: '#909399',
+  chart: '#909399',
+  chart_footnote: '#909399',
+  table_caption: '#e6a23c',
+  table: '#67c23a',
+  table_footnote: '#e6a23c',
+  page_footnote: '#409eff',
+  figure_caption: '#909399',
   figure: '#909399',
-  formula: '#b88230'
+  figure_footnote: '#909399'
 }
 
 export const VIEW_MODES: Record<string, ViewMode | OCRViewMode> = {

@@ -230,13 +230,19 @@ export class UIUtils {
    */
   static getElementTypeColor(type: ElementType): string {
     const colorMap: Record<ElementType, string> = {
-      text: '#409eff',
-      table: '#67c23a',
-      table_caption: '#e6a23c',
-      table_footnote: '#e6a23c',
       title: '#f56c6c',
+      text: '#409eff',
+      footnote: '#409eff',
+      chart_caption: '#909399',
+      chart: '#909399',
+      chart_footnote: '#909399',
+      table_caption: '#e6a23c',
+      table: '#67c23a',
+      table_footnote: '#e6a23c',
+      page_footnote: '#409eff',
+      figure_caption: '#909399',
       figure: '#909399',
-      formula: '#b88230'
+      figure_footnote: '#909399'
     }
     return colorMap[type] || '#909399'
   }
@@ -246,13 +252,19 @@ export class UIUtils {
    */
   static getElementTagType(type: ElementType): string {
     const typeMap: Record<ElementType, string> = {
-      text: '',
-      table: 'success',
-      table_caption: 'warning',
-      table_footnote: 'warning',
       title: 'danger',
+      text: '',
+      footnote: 'primary',
+      chart_caption: 'info',
+      chart: 'info',
+      chart_footnote: 'info',
+      table_caption: 'warning',
+      table: 'success',
+      table_footnote: 'warning',
+      page_footnote: 'primary',
+      figure_caption: 'info',
       figure: 'info',
-      formula: 'warning'
+      figure_footnote: 'info'
     }
     return typeMap[type] || ''
   }

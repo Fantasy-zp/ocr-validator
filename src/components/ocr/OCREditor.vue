@@ -36,15 +36,21 @@
         <el-row :gutter="20">
           <el-col :span="8">
             <el-form-item label="类型">
-              <el-select v-model="editForm.category_type" placeholder="选择类型">
-                <el-option label="文本" value="text" />
-                <el-option label="表格" value="table" />
-                <el-option label="表格标题" value="table_caption" />
-                <el-option label="表格脚注" value="table_footnote" />
-                <el-option label="标题" value="title" />
-                <el-option label="图片" value="figure" />
-                <el-option label="公式" value="formula" />
-              </el-select>
+              <el-select v-model="editForm.category_type" placeholder="Select type">
+                  <el-option label="title" value="title" />
+                  <el-option label="text" value="text" />
+                  <el-option label="footnote" value="footnote" />
+                  <el-option label="chart_caption" value="chart_caption" />
+                  <el-option label="chart" value="chart" />
+                  <el-option label="chart_footnote" value="chart_footnote" />
+                  <el-option label="table_caption" value="table_caption" />
+                  <el-option label="table" value="table" />
+                  <el-option label="table_footnote" value="table_footnote" />
+                  <el-option label="page_footnote" value="page_footnote" />
+                  <el-option label="figure_caption" value="figure_caption" />
+                  <el-option label="figure" value="figure" />
+                  <el-option label="figure_footnote" value="figure_footnote" />
+                </el-select>
             </el-form-item>
           </el-col>
 

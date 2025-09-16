@@ -120,7 +120,9 @@ const overlayStyle = computed<CSSProperties>(() => ({
 
 // 获取边界框CSS类
 const getBBoxClass = (type: string, index: number) => {
-  const classes = ['bbox', `bbox-${type}`]
+  // 规范化类型名称，确保它是有效的CSS类名
+  const normalizedType = type.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-')
+  const classes = ['bbox', `bbox-${normalizedType}`]
   if (props.selectedIndex === index) {
     classes.push('bbox-selected')
   }
@@ -398,24 +400,87 @@ onUnmounted(() => {
       stroke-width: 3;
     }
 
-    &-text {
-      stroke: #409eff;
-      fill: rgba(64, 158, 255, 0.1);
-    }
-
-    &-table {
-      stroke: #67c23a;
-      fill: rgba(103, 194, 58, 0.1);
-    }
-
+    // 标题类型 - 红色系
     &-title {
       stroke: #f56c6c;
       fill: rgba(245, 108, 108, 0.1);
     }
 
-    &-figure {
+    // 正文类型 - 蓝色系
+    &-text {
+      stroke: #409eff;
+      fill: rgba(64, 158, 255, 0.1);
+    }
+
+    // 脚注类型 - 深蓝色系
+    &-footnote,
+    &-page-footnote {
+      stroke: #66b1ff;
+      fill: rgba(102, 177, 255, 0.1);
+    }
+
+    // 图表相关类型
+    &-chart {
       stroke: #909399;
       fill: rgba(144, 147, 153, 0.1);
+    }
+
+    &-chart-caption {
+      stroke: #722ed1;
+      fill: rgba(114, 46, 209, 0.1);
+    }
+
+    &-chart-footnote {
+      stroke: #9254de;
+      fill: rgba(146, 84, 222, 0.1);
+    }
+
+    // 表格相关类型
+    &-table {
+      stroke: #67c23a;
+      fill: rgba(103, 194, 58, 0.1);
+    }
+
+    &-table-caption {
+      stroke: #e6a23c;
+      fill: rgba(230, 162, 60, 0.1);
+    }
+
+    &-table-footnote {
+      stroke: #fadb14;
+      fill: rgba(250, 219, 20, 0.1);
+    }
+
+    // 图片/图形相关类型
+    &-figure {
+      stroke: #13c2c2;
+      fill: rgba(19, 194, 194, 0.1);
+    }
+
+    &-figure-caption {
+      stroke: #52c41a;
+      fill: rgba(82, 196, 26, 0.1);
+    }
+
+    &-figure-footnote {
+      stroke: #fa8c16;
+      fill: rgba(250, 140, 22, 0.1);
+    }
+
+    // 选中状态增强
+    &-selected {
+      stroke-width: 3;
+      opacity: 1 !important;
+      fill-opacity: 0.2 !important;
+      filter: drop-shadow(0 0 4px rgba(64, 158, 255, 0.5));
+    }
+
+    // 悬停效果
+    &:hover:not(&-selected) {
+      stroke-width: 3;
+      opacity: 0.9;
+      filter: drop-shadow(0 0 2px rgba(64, 158, 255, 0.3));
+      transition: all 0.2s ease;
     }
 
     &-selected {

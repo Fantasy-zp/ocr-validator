@@ -43,14 +43,20 @@
   <el-dialog v-model="editDialogVisible" title="编辑元素" width="600px">
     <el-form :model="editForm" label-width="100px">
       <el-form-item label="类型">
-        <el-select v-model="editForm.category_type" placeholder="选择类型">
-          <el-option label="文本" value="text" />
-          <el-option label="表格" value="table" />
-          <el-option label="表格标题" value="table_caption" />
-          <el-option label="表格脚注" value="table_footnote" />
-          <el-option label="标题" value="title" />
-          <el-option label="图片" value="figure" />
-          <el-option label="公式" value="formula" />
+        <el-select v-model="editForm.category_type" placeholder="Select type">
+          <el-option label="title" value="title" />
+          <el-option label="text" value="text" />
+          <el-option label="footnote" value="footnote" />
+          <el-option label="chart_caption" value="chart_caption" />
+          <el-option label="chart" value="chart" />
+          <el-option label="chart_footnote" value="chart_footnote" />
+          <el-option label="table_caption" value="table_caption" />
+          <el-option label="table" value="table" />
+          <el-option label="table_footnote" value="table_footnote" />
+          <el-option label="page_footnote" value="page_footnote" />
+          <el-option label="figure_caption" value="figure_caption" />
+          <el-option label="figure" value="figure" />
+          <el-option label="figure_footnote" value="figure_footnote" />
         </el-select>
       </el-form-item>
 
@@ -134,13 +140,19 @@ const editForm = reactive<{
 // 获取类型标签颜色
 const getTypeTagColor = (type: ElementType) => {
   const colorMap: Record<ElementType, string> = {
-    text: '',
-    table: 'success',
-    table_caption: 'warning',
-    table_footnote: 'warning',
     title: 'danger',
+    text: '',
+    footnote: 'primary',
+    chart_caption: 'info',
+    chart: 'info',
+    chart_footnote: 'info',
+    table_caption: 'warning',
+    table: 'success',
+    table_footnote: 'warning',
+    page_footnote: 'primary',
+    figure_caption: 'info',
     figure: 'info',
-    formula: 'warning'
+    figure_footnote: 'info'
   }
   return colorMap[type] || ''
 }
@@ -206,25 +218,103 @@ const confirmEdit = () => {
     border-left: 4px solid #409eff;
   }
 
-  &.type-table {
-    border-left: 4px solid #67c23a;
-  }
-
-  &.type-table_caption,
-  &.type-table_footnote {
-    border-left: 4px solid #e6a23c;
-  }
-
+  // 标题类型 - 红色系
   &.type-title {
     border-left: 4px solid #f56c6c;
+    background-color: rgba(245, 108, 108, 0.05);
+    border-radius: 4px;
   }
 
-  &.type-figure {
+  // 正文类型 - 蓝色系
+  &.type-text {
+    border-left: 4px solid #409eff;
+    background-color: rgba(64, 158, 255, 0.05);
+    border-radius: 4px;
+  }
+
+  // 脚注类型 - 深蓝色系
+  &.type-footnote,
+  &.type-page-footnote {
+    border-left: 4px solid #66b1ff;
+    background-color: rgba(102, 177, 255, 0.05);
+    border-radius: 4px;
+  }
+
+  // 图表相关类型
+  &.type-chart {
     border-left: 4px solid #909399;
+    background-color: rgba(144, 147, 153, 0.05);
+    border-radius: 4px;
+  }
+  
+  &.type-chart_caption,
+  &.type-chart-caption {
+    border-left: 4px solid #722ed1;
+    background-color: rgba(114, 46, 209, 0.05);
+    border-radius: 4px;
+  }
+  
+  &.type-chart_footnote,
+  &.type-chart-footnote {
+    border-left: 4px solid #9254de;
+    background-color: rgba(146, 84, 222, 0.05);
+    border-radius: 4px;
   }
 
-  &.type-formula {
-    border-left: 4px solid #b88230;
+  // 表格相关类型
+  &.type-table {
+    border-left: 4px solid #67c23a;
+    background-color: rgba(103, 194, 58, 0.05);
+    border-radius: 4px;
+  }
+  
+  &.type-table_caption,
+  &.type-table-caption {
+    border-left: 4px solid #e6a23c;
+    background-color: rgba(230, 162, 60, 0.05);
+    border-radius: 4px;
+  }
+  
+  &.type-table_footnote,
+  &.type-table-footnote {
+    border-left: 4px solid #fadb14;
+    background-color: rgba(250, 219, 20, 0.05);
+    border-radius: 4px;
+  }
+
+  // 图片/图形相关类型
+  &.type-figure {
+    border-left: 4px solid #13c2c2;
+    background-color: rgba(19, 194, 194, 0.05);
+    border-radius: 4px;
+  }
+  
+  &.type-figure_caption,
+  &.type-figure-caption {
+    border-left: 4px solid #52c41a;
+    background-color: rgba(82, 196, 26, 0.05);
+    border-radius: 4px;
+  }
+  
+  &.type-figure_footnote,
+  &.type-figure-footnote {
+    border-left: 4px solid #fa8c16;
+    background-color: rgba(250, 140, 22, 0.05);
+    border-radius: 4px;
+  }
+
+  // 选中状态增强
+  &.selected {
+    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.5);
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+  }
+
+  // 悬浮效果
+  &:hover {
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
   }
 
   .card-header {
