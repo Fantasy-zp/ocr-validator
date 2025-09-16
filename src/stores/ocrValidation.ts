@@ -33,9 +33,8 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // 当前JSONL文件名
   const currentFileName = ref<string | null>(null)
 
-  // 编辑历史状态
-  const editHistory = ref<EditAction[]>([])
-  const historyIndex = ref(-1)
+  // 编辑历史状态 - 按样本隔离
+  const sampleHistories = ref<Map<number, { history: EditAction[], index: number }>>(new Map())
   const maxHistorySize = ref(50) // 限制历史记录大小
 
   // 修改追踪
@@ -48,6 +47,24 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   const currentSample = computed(() => samples.value[currentIndex.value] || null)
   const totalSamples = computed(() => samples.value.length)
   const hasData = computed(() => samples.value.length > 0)
+
+  // 当前样本的编辑历史
+  const currentHistory = computed(() => {
+    if (!sampleHistories.value.has(currentIndex.value)) {
+      sampleHistories.value.set(currentIndex.value, { history: [], index: -1 })
+    }
+    return sampleHistories.value.get(currentIndex.value)!
+  })
+
+  // 历史操作状态
+  const canUndo = computed(() => {
+    const history = currentHistory.value
+    return history && history.index >= 0
+  })
+  const canRedo = computed(() => {
+    const history = currentHistory.value
+    return history && history.index < history.history.length - 1
+  })
 
   // ===== 持久化方法 =====
 
@@ -142,8 +159,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         pdfFileNames: Array.from(pdfFiles.value.keys()),
         modifiedSamples: Array.from(modifiedSamples.value),
         viewMode: viewMode.value,
-        editHistory: editHistory.value,
-        historyIndex: historyIndex.value,
+        sampleHistories: Array.from(sampleHistories.value.entries()),
         hasSelectedPDFDirectory: !!pdfDirectoryHandle.value,
         lastSavedTimestamp: Date.now()
       }
@@ -202,7 +218,12 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       // 重置其他状态
       selectedElementIndex.value = null
       modifiedSamples.value.clear()
-      clearHistory()
+      clearAllHistories() // 清除所有历史记录
+
+      // 恢复样本历史记录
+      if (data.sampleHistories && Array.isArray(data.sampleHistories)) {
+        sampleHistories.value = new Map(data.sampleHistories)
+      }
 
       // 重新计算所有样本的修改状态，确保修改标记正确显示
       recalculateModifications()
@@ -306,10 +327,6 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     return [...currentSample.value.layout_dets].sort((a, b) => a.order - b.order)
   })
 
-  // 历史操作状态
-  const canUndo = computed(() => historyIndex.value >= 0)
-  const canRedo = computed(() => historyIndex.value < editHistory.value.length - 1)
-
   // 选中元素信息
   const selectedElement = computed(() => {
     if (selectedElementIndex.value === null || !currentSample.value) return null
@@ -374,8 +391,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   function undo() {
     if (!canUndo.value || !currentSample.value) return false
 
-    const action = editHistory.value[historyIndex.value]
-    historyIndex.value--
+    const history = currentHistory.value
+    const action = history.history[history.index]
+    history.index--
 
     try {
       executeHistoryAction(action, 'undo')
@@ -384,7 +402,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       return true
     } catch (error) {
       console.error('撤销操作失败:', error)
-      historyIndex.value++ // 恢复索引
+      history.index++ // 恢复索引
       return false
     }
   }
@@ -395,8 +413,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   function redo() {
     if (!canRedo.value || !currentSample.value) return false
 
-    historyIndex.value++
-    const action = editHistory.value[historyIndex.value]
+    const history = currentHistory.value
+    history.index++
+    const action = history.history[history.index]
 
     try {
       executeHistoryAction(action, 'redo')
@@ -405,7 +424,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       return true
     } catch (error) {
       console.error('重做操作失败:', error)
-      historyIndex.value-- // 恢复索引
+      history.index-- // 恢复索引
       return false
     }
   }
@@ -422,6 +441,8 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     }))
     currentIndex.value = Math.min(index, newSamples.length - 1)
     selectedElementIndex.value = null
+    // 清除所有历史记录
+    clearAllHistories()
     // 重新计算所有样本的修改状态
     recalculateModifications()
   }
@@ -773,19 +794,21 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
    * 添加到历史记录
    */
   function addToHistory(action: EditAction) {
+    const history = currentHistory.value
+    
     // 如果不在历史记录的最后，删除后面的历史
-    if (historyIndex.value < editHistory.value.length - 1) {
-      editHistory.value.splice(historyIndex.value + 1)
+    if (history.index < history.history.length - 1) {
+      history.history.splice(history.index + 1)
     }
 
     // 添加新动作
-    editHistory.value.push(action)
-    historyIndex.value = editHistory.value.length - 1
+    history.history.push(action)
+    history.index = history.history.length - 1
 
     // 限制历史记录大小
-    if (editHistory.value.length > maxHistorySize.value) {
-      editHistory.value.shift()
-      historyIndex.value--
+    if (history.history.length > maxHistorySize.value) {
+      history.history.shift()
+      history.index--
     }
   }
 
@@ -896,11 +919,17 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   }
 
   /**
-   * 清除历史记录
+   * 清除当前样本的历史记录
    */
   function clearHistory() {
-    editHistory.value = []
-    historyIndex.value = -1
+    sampleHistories.value.set(currentIndex.value, { history: [], index: -1 })
+  }
+
+  /**
+   * 清除所有样本的历史记录
+   */
+  function clearAllHistories() {
+    sampleHistories.value.clear()
   }
 
   // ===== 导航操作 =====
@@ -1016,8 +1045,8 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       selectedElementIndex: selectedElementIndex.value,
       viewMode: viewMode.value,
       pdfFiles: new Map(pdfFiles.value),
-      editHistory: DataUtils.deepClone(editHistory.value),
-      historyIndex: historyIndex.value,
+      editHistory: DataUtils.deepClone(currentHistory.value.history),
+      historyIndex: currentHistory.value.index,
       modifiedSamples: new Set(modifiedSamples.value)
     }
   }
@@ -1031,8 +1060,10 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     selectedElementIndex.value = snapshot.selectedElementIndex
     viewMode.value = snapshot.viewMode
     pdfFiles.value = snapshot.pdfFiles
-    editHistory.value = snapshot.editHistory
-    historyIndex.value = snapshot.historyIndex
+    sampleHistories.value.set(currentIndex.value, {
+      history: snapshot.editHistory || [],
+      index: snapshot.historyIndex || -1
+    })
     modifiedSamples.value = snapshot.modifiedSamples
   }
 
@@ -1157,6 +1188,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     undo,
     redo,
     clearHistory,
+    clearAllHistories,
 
     // 导航操作
     navigateTo,
