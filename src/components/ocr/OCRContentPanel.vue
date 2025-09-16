@@ -30,37 +30,15 @@
 
       <!-- 普通列表（元素少于100个） -->
       <div v-else class="normal-list">
-        <div
-          v-for="(elem, idx) in elements"
-          :key="idx"
-          class="draggable-item"
-          :draggable="true"
-          @dragstart="handleDragStart(idx)"
-          @dragover.prevent="handleDragOver(idx)"
-          @drop="handleDrop(idx)"
-        >
-          <OCRElementCard 
-            :element="elem" 
-            :index="idx" 
-            :view-mode="viewMode"
-            :is-selected="selectedIndex === idx" 
-            @click="handleElementClick(idx)" 
-            @edit="handleElementEdit(idx, $event)" 
-            @delete="handleElementDelete(idx)" 
-          />
+        <div v-for="(elem, idx) in elements" :key="idx" class="draggable-item" :draggable="true"
+          @dragstart="handleDragStart(idx)" @dragover.prevent="handleDragOver(idx)" @drop="handleDrop(idx)">
+          <OCRElementCard :element="elem" :index="idx" :view-mode="viewMode" :is-selected="selectedIndex === idx"
+            @click="handleElementClick(idx)" @edit="handleElementEdit(idx, $event)"
+            @delete="handleElementDelete(idx)" />
           <div class="move-controls">
-            <el-button 
-              icon="el-icon-top" 
-              size="small" 
-              @click.stop="moveElementUp(idx)"
-              :disabled="idx === 0"
-            />
-            <el-button 
-              icon="el-icon-bottom" 
-              size="small" 
-              @click.stop="moveElementDown(idx)"
-              :disabled="idx === elements.length - 1"
-            />
+            <el-button icon="el-icon-top" size="small" @click.stop="moveElementUp(idx)" :disabled="idx === 0" />
+            <el-button icon="el-icon-bottom" size="small" @click.stop="moveElementDown(idx)"
+              :disabled="idx === elements.length - 1" />
           </div>
         </div>
       </div>
@@ -276,7 +254,7 @@ const handleDragStart = (index: number) => {
 
 const handleDragOver = (_index: number) => {
   // 防止默认行为以允许放置
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   // _index参数用于满足拖拽API要求，但在当前实现中未使用
 }
 
@@ -284,12 +262,12 @@ const handleDrop = async (dropIndex: number) => {
   if (draggedElementIndex.value !== null && draggedElementIndex.value !== dropIndex) {
     const newOrder = [...Array(props.elements.length).keys()]
     const draggedIndex = draggedElementIndex.value
-    
+
     // 移除被拖拽的元素
     newOrder.splice(draggedIndex, 1)
     // 在目标位置插入
     newOrder.splice(dropIndex, 0, draggedIndex)
-    
+
     // 调用reorderElements函数应用新的顺序
     const success = await ocrStore.reorderElements(newOrder)
     if (success) {
@@ -309,7 +287,7 @@ const moveElementUp = async (index: number) => {
     const temp = newOrder[index - 1]
     newOrder[index - 1] = newOrder[index]
     newOrder[index] = temp
-    
+
     const success = await ocrStore.reorderElements(newOrder)
     if (success) {
       ElMessage.success('元素已向上移动')
@@ -325,7 +303,7 @@ const moveElementDown = async (index: number) => {
     const temp = newOrder[index]
     newOrder[index] = newOrder[index + 1]
     newOrder[index + 1] = temp
-    
+
     const success = await ocrStore.reorderElements(newOrder)
     if (success) {
       ElMessage.success('元素已向下移动')
@@ -343,39 +321,39 @@ const moveElementDown = async (index: number) => {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  
+
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
-    
+
     .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
     }
   }
-  
+
   .elements-container {
     flex: 1;
     overflow-y: auto;
     margin-bottom: 16px;
-    
+
     .normal-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      
+
       .draggable-item {
         position: relative;
-        
+
         &:hover {
           .move-controls {
             display: flex;
           }
         }
-        
+
         .move-controls {
           display: none;
           position: absolute;
@@ -389,41 +367,41 @@ const moveElementDown = async (index: number) => {
       }
     }
   }
-  
+
   .page-info-panel {
     padding: 16px;
     background: #f5f7fa;
     border-radius: 8px;
-    
+
     .panel-info-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
-      
+
       h4 {
         margin: 0;
         font-size: 16px;
         font-weight: 500;
       }
     }
-    
+
     .info-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       gap: 16px;
-      
+
       .info-item {
         display: flex;
         align-items: center;
-        
+
         .info-label {
           font-size: 14px;
           color: #606266;
           margin-right: 8px;
           min-width: 60px;
         }
-        
+
         .info-value {
           font-size: 14px;
           color: #303133;

@@ -1,12 +1,8 @@
 <template>
-  <div
-    class="element-card"
-    :class="{
-      'selected': isSelected,
-      [`type-${element.category_type}`]: true
-    }"
-    @click="$emit('click')"
-  >
+  <div class="element-card" :class="{
+    'selected': isSelected,
+    [`type-${element.category_type}`]: true
+  }" @click="$emit('click')">
     <div class="card-header">
       <div class="header-left">
         <span class="element-index">[{{ index }}]</span>
@@ -17,19 +13,8 @@
       </div>
 
       <div class="header-actions">
-        <el-button
-          text
-          :icon="Edit"
-          size="small"
-          @click.stop="handleEdit"
-        />
-        <el-button
-          text
-          :icon="Delete"
-          size="small"
-          type="danger"
-          @click.stop="$emit('delete')"
-        />
+        <el-button text :icon="Edit" size="small" @click.stop="handleEdit" />
+        <el-button text :icon="Delete" size="small" type="danger" @click.stop="$emit('delete')" />
       </div>
     </div>
 
@@ -55,11 +40,7 @@
   </div>
 
   <!-- 编辑对话框 -->
-  <el-dialog
-    v-model="editDialogVisible"
-    title="编辑元素"
-    width="600px"
-  >
+  <el-dialog v-model="editDialogVisible" title="编辑元素" width="600px">
     <el-form :model="editForm" label-width="100px">
       <el-form-item label="类型">
         <el-select v-model="editForm.category_type" placeholder="选择类型">
@@ -84,7 +65,7 @@
             <div class="coord-input-group">
               <span class="coord-input-label">x1: </span>
               <el-input-number v-model="editForm.poly[0]" :min="0" />
-              <span class="coord-input-label">  y1: </span>
+              <span class="coord-input-label"> y1: </span>
               <el-input-number v-model="editForm.poly[1]" :min="0" />
             </div>
           </div>
@@ -93,7 +74,7 @@
             <div class="coord-input-group">
               <span class="coord-input-label">x2: </span>
               <el-input-number v-model="editForm.poly[2]" :min="0" />
-              <span class="coord-input-label">  y2: </span>
+              <span class="coord-input-label"> y2: </span>
               <el-input-number v-model="editForm.poly[3]" :min="0" />
             </div>
           </div>
@@ -101,21 +82,11 @@
       </el-form-item>
 
       <el-form-item label="内容" v-if="editForm.category_type === 'table'">
-        <el-input
-          v-model="editForm.html"
-          type="textarea"
-          :rows="6"
-          placeholder="输入HTML内容"
-        />
+        <el-input v-model="editForm.html" type="textarea" :rows="6" placeholder="输入HTML内容" />
       </el-form-item>
 
       <el-form-item label="内容" v-else>
-        <el-input
-          v-model="editForm.text"
-          type="textarea"
-          :rows="6"
-          placeholder="输入文本内容"
-        />
+        <el-input v-model="editForm.text" type="textarea" :rows="6" placeholder="输入文本内容" />
       </el-form-item>
     </el-form>
 
@@ -297,7 +268,8 @@ const confirmEdit = () => {
           width: 100%;
           border-collapse: collapse;
 
-          th, td {
+          th,
+          td {
             border: 1px solid #dcdfe6;
             padding: 6px;
             font-size: 13px;

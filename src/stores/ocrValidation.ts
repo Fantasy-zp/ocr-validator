@@ -653,16 +653,16 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
     try {
       // 获取排序后索引对应的原始元素
       const elementToDelete = currentElements.value[index]
-      
+
       // 改进元素查找逻辑，使用更可靠的方式
       // 创建一个唯一标识符来查找元素
       const findOriginalElement = () => {
         // 首先尝试精确匹配引用
         const exactMatchIndex = currentSample.value.layout_dets.findIndex(el => el === elementToDelete)
         if (exactMatchIndex !== -1) return exactMatchIndex
-        
+
         // 如果引用不匹配，使用多字段组合匹配
-        return currentSample.value.layout_dets.findIndex(el => 
+        return currentSample.value.layout_dets.findIndex(el =>
           el.category_type === elementToDelete.category_type &&
           el.order === elementToDelete.order &&
           el.poly.join(',') === elementToDelete.poly.join(',') &&
@@ -670,9 +670,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
            (el.html && elementToDelete.html && el.html === elementToDelete.html))
         )
       }
-      
+
       const originalIndex = findOriginalElement()
-      
+
       if (originalIndex === -1) {
         console.error('未找到要删除的元素:', elementToDelete)
         return false
@@ -719,7 +719,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
     try {
       const oldOrder = DataUtils.deepClone(currentSample.value.layout_dets)
-      
+
       if (newOrder && Array.isArray(newOrder)) {
         // 检查新顺序是否有效
         if (newOrder.length !== currentSample.value.layout_dets.length) {
@@ -728,7 +728,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         }
 
         // 检查是否包含所有索引
-        const hasAllIndexes = newOrder.every((value, index) => 
+        const hasAllIndexes = newOrder.every((value, index) =>
           newOrder.includes(index)
         )
         if (!hasAllIndexes) {
@@ -803,9 +803,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
             const targetElement = direction === 'undo' ? action.oldValue : action.newValue
             // 增强类型检查
             if (
-              targetElement && 
-              typeof targetElement === 'object' && 
-              !Array.isArray(targetElement) && 
+              targetElement &&
+              typeof targetElement === 'object' &&
+              !Array.isArray(targetElement) &&
               'category_type' in targetElement &&
               'poly' in targetElement &&
               Array.isArray((targetElement as LayoutElement).poly)
@@ -819,9 +819,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
             const targetPageInfo = direction === 'undo' ? action.oldValue : action.newValue
             // 增强类型检查
             if (
-              targetPageInfo && 
-              typeof targetPageInfo === 'object' && 
-              !Array.isArray(targetPageInfo) && 
+              targetPageInfo &&
+              typeof targetPageInfo === 'object' &&
+              !Array.isArray(targetPageInfo) &&
               'language' in targetPageInfo
             ) {
               currentSample.value.page_info = targetPageInfo as PageInfo
@@ -835,9 +835,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
           if (direction === 'undo') {
             // 撤销添加 = 删除元素
             if (
-              action.newValue && 
-              typeof action.newValue === 'object' && 
-              !Array.isArray(action.newValue) && 
+              action.newValue &&
+              typeof action.newValue === 'object' &&
+              !Array.isArray(action.newValue) &&
               'category_type' in action.newValue
             ) {
               const layoutElement = action.newValue as LayoutElement
@@ -852,9 +852,9 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
           } else {
             // 重做添加 = 重新添加元素
             if (
-              action.newValue && 
-              typeof action.newValue === 'object' && 
-              !Array.isArray(action.newValue) && 
+              action.newValue &&
+              typeof action.newValue === 'object' &&
+              !Array.isArray(action.newValue) &&
               'category_type' in action.newValue
             ) {
               currentSample.value.layout_dets.push(action.newValue as LayoutElement)
@@ -864,10 +864,10 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
         case 'delete':
           if (
-            action.elementIndex !== undefined && 
-            action.oldValue && 
-            typeof action.oldValue === 'object' && 
-            !Array.isArray(action.oldValue) && 
+            action.elementIndex !== undefined &&
+            action.oldValue &&
+            typeof action.oldValue === 'object' &&
+            !Array.isArray(action.oldValue) &&
             'category_type' in action.oldValue
           ) {
             if (direction === 'undo') {
@@ -970,10 +970,10 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
    */
   async function updatePageInfo(updates: Partial<PageInfo>) {
     if (!currentSample.value) return false
-  
+
     const oldPageInfo = DataUtils.deepClone(currentSample.value.page_info)
     const newPageInfo = { ...oldPageInfo, ...updates }
-  
+
     // 记录编辑历史
     addToHistory({
       type: 'modify',
@@ -982,12 +982,12 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       newValue: newPageInfo,
       timestamp: Date.now()
     })
-  
+
     try {
       // 更新页面信息
       currentSample.value.page_info = newPageInfo
       modifiedSamples.value.add(currentIndex.value)
-  
+
       // 自动保存数据（添加await）
       await saveToLocalStorage()
       return true

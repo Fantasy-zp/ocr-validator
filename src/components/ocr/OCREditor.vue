@@ -1,8 +1,15 @@
 <template>
-  <div class="ocr-editor">
+  <div class="ocr-editor" :style="{ height: editorHeight + 'px' }">
+    <!-- 拖拽条 -->
+    <div class="editor-resizer" @mousedown="startResize" :class="{ 'resizing': isResizing }">
+      <div class="resizer-handle"></div>
+    </div>
+
     <div class="editor-header">
       <div class="header-title">
-        <el-icon><EditPen /></el-icon>
+        <el-icon>
+          <EditPen />
+        </el-icon>
         <strong>元素编辑器</strong>
         <el-tag size="small" type="info" v-if="ocrStore.selectedElementIndex !== null">
           正在编辑: [{{ ocrStore.selectedElementIndex }}]
@@ -10,28 +17,15 @@
       </div>
 
       <div class="editor-actions">
-        <el-button
-          size="small"
-          @click="addNewElement"
-          type="primary"
-          :icon="Plus"
-        >
+        <el-button size="small" @click="addNewElement" type="primary" :icon="Plus">
           添加元素
         </el-button>
 
-        <el-button
-          size="small"
-          @click="reorderElements"
-          :icon="Sort"
-        >
+        <el-button size="small" @click="reorderElements" :icon="Sort">
           重新排序
         </el-button>
 
-        <el-button
-          size="small"
-          @click="clearSelection"
-          :disabled="ocrStore.selectedElementIndex === null"
-        >
+        <el-button size="small" @click="clearSelection" :disabled="ocrStore.selectedElementIndex === null">
           清除选择
         </el-button>
       </div>
@@ -87,20 +81,9 @@
         <el-row>
           <el-col :span="24">
             <el-form-item :label="editForm.category_type === 'table' ? 'HTML' : '文本'">
-              <el-input
-                v-if="editForm.category_type === 'table'"
-                v-model="editForm.html"
-                type="textarea"
-                :rows="3"
-                placeholder="输入HTML内容"
-              />
-              <el-input
-                v-else
-                v-model="editForm.text"
-                type="textarea"
-                :rows="3"
-                placeholder="输入文本内容"
-              />
+              <el-input v-if="editForm.category_type === 'table'" v-model="editForm.html" type="textarea" :rows="3"
+                placeholder="输入HTML内容" />
+              <el-input v-else v-model="editForm.text" type="textarea" :rows="3" placeholder="输入文本内容" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -130,11 +113,7 @@
   </div>
 
   <!-- 添加元素对话框 -->
-  <el-dialog
-    v-model="addDialogVisible"
-    title="添加新元素"
-    width="500px"
-  >
+  <el-dialog v-model="addDialogVisible" title="添加新元素" width="500px">
     <el-form :model="newElementForm" label-width="100px">
       <el-form-item label="类型" required>
         <el-select v-model="newElementForm.category_type" placeholder="选择类型">
@@ -147,20 +126,9 @@
       </el-form-item>
 
       <el-form-item label="内容" required>
-        <el-input
-          v-if="newElementForm.category_type === 'table'"
-          v-model="newElementForm.html"
-          type="textarea"
-          :rows="5"
-          placeholder="输入HTML内容"
-        />
-        <el-input
-          v-else
-          v-model="newElementForm.text"
-          type="textarea"
-          :rows="5"
-          placeholder="输入文本内容"
-        />
+        <el-input v-if="newElementForm.category_type === 'table'" v-model="newElementForm.html" type="textarea"
+          :rows="5" placeholder="输入HTML内容" />
+        <el-input v-else v-model="newElementForm.text" type="textarea" :rows="5" placeholder="输入文本内容" />
       </el-form-item>
 
       <el-form-item label="坐标" required>
@@ -189,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   EditPen,
@@ -204,6 +172,12 @@ import { useOCRValidationStore } from '@/stores/ocrValidation'
 import type { LayoutElement, ElementType } from '@/types'
 
 const ocrStore = useOCRValidationStore()
+
+// 拖拽相关变量
+const editorHeight = ref(400) // 默认高度
+const isResizing = ref(false)
+const startY = ref(0)
+const startHeight = ref(0)
 
 // 选中的元素
 const selectedElement = computed(() => {
@@ -306,7 +280,7 @@ const deleteElement = () => {
     ocrStore.deleteElement(ocrStore.selectedElementIndex!)
     ocrStore.selectElement(null)
     ElMessage.success('元素已删除')
-  }).catch(() => {})
+  }).catch(() => { })
 }
 
 // 添加新元素
@@ -355,6 +329,60 @@ const reorderElements = () => {
 const clearSelection = () => {
   ocrStore.selectElement(null)
 }
+
+// 拖拽调整高度相关方法
+const startResize = (e: MouseEvent) => {
+  e.preventDefault()
+  isResizing.value = true
+  startY.value = e.clientY
+  startHeight.value = editorHeight.value
+
+  // 添加全局事件监听器
+  document.addEventListener('mousemove', onResize)
+  document.addEventListener('mouseup', stopResize)
+
+  // 防止文本选择
+  document.body.style.userSelect = 'none'
+}
+
+const onResize = (e: MouseEvent) => {
+  if (!isResizing.value) return
+
+  // 计算新高度（注意符号：向上拖拽增加高度）
+  const delta = startY.value - e.clientY
+  const newHeight = Math.max(200, Math.min(800, startHeight.value + delta))
+  editorHeight.value = newHeight
+}
+
+const stopResize = () => {
+  isResizing.value = false
+
+  // 移除全局事件监听器
+  document.removeEventListener('mousemove', onResize)
+  document.removeEventListener('mouseup', stopResize)
+
+  // 恢复文本选择
+  document.body.style.userSelect = ''
+}
+
+// 组件挂载时设置初始高度
+onMounted(() => {
+  // 可以从localStorage中读取保存的高度
+  const savedHeight = localStorage.getItem('editorHeight')
+  if (savedHeight) {
+    editorHeight.value = parseInt(savedHeight, 10)
+  }
+})
+
+// 监听高度变化并保存
+watch(editorHeight, (newHeight) => {
+  localStorage.setItem('editorHeight', newHeight.toString())
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  stopResize()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -362,6 +390,51 @@ const clearSelection = () => {
   background: white;
   border-top: 1px solid #e4e7ed;
   box-shadow: 0 -1px 4px rgba(0, 21, 41, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.1s ease;
+  position: relative;
+  /* 为拖拽条的绝对定位提供参考 */
+  height: auto;
+  /* 确保高度可以动态调整 */
+
+  /* 拖拽条样式 */
+  .editor-resizer {
+    position: absolute;
+    top: -5px;
+    left: 0;
+    right: 0;
+    height: 10px;
+    cursor: ns-resize;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: transparent;
+    transition: background-color 0.2s ease;
+    z-index: 10;
+
+    &:hover {
+      background-color: rgba(192, 196, 204, 0.1);
+    }
+
+    &.resizing {
+      background-color: rgba(192, 196, 204, 0.2);
+    }
+
+    .resizer-handle {
+      width: 40px;
+      height: 4px;
+      background-color: #c0c4cc;
+      border-radius: 2px;
+      transition: background-color 0.2s ease;
+
+      .editor-resizer:hover &,
+      .editor-resizer.resizing & {
+        background-color: #909399;
+      }
+    }
+  }
 
   .editor-header {
     padding: 12px 20px;
@@ -389,9 +462,40 @@ const clearSelection = () => {
 
   .editor-content {
     padding: 16px 20px;
+    overflow-y: auto;
+    /* 内容区域启用垂直滚动 */
+    flex: 1;
+    /* 占据剩余空间，随编辑器高度动态调整 */
+    min-height: 0;
+    /* 解决flex子元素最小高度问题 */
+    /* 滚动条样式 - Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #c0c4cc transparent;
+
+    /* 滚动条样式 - Webkit (Chrome, Safari) */
+    &::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: #c0c4cc;
+      border-radius: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background-color: #909399;
+    }
 
     .el-form {
       margin: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
   }
 
