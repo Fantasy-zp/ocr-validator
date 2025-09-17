@@ -102,36 +102,48 @@ export class TableParser {
   private static calculateTableDimensions(table: HTMLTableElement): { rowCount: number, colCount: number } {
     const rows = Array.from(table.querySelectorAll('tr'))
     const rowCount = rows.length
-    let colCount = 0
+    
+    // 没有行则返回空表格
+    if (rowCount === 0) {
+      return { rowCount: 0, colCount: 0 }
+    }
 
-    // 创建占位矩阵来计算实际列数
+    // 创建占位矩阵来跟踪每个单元格的占用情况
     const occupied: boolean[][] = Array(rowCount).fill(null).map(() => [])
+    let colCount = 0
 
     rows.forEach((tr, rowIndex) => {
       const cells = Array.from(tr.querySelectorAll('td, th'))
       let colIndex = 0
 
       cells.forEach(cell => {
-        // 跳过已被占用的位置
-        while (occupied[rowIndex][colIndex]) {
+        // 跳过已被合并单元格占用的位置
+        while (colIndex < occupied[rowIndex].length && occupied[rowIndex][colIndex]) {
           colIndex++
         }
 
-        const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10)
-        const colspan = parseInt(cell.getAttribute('colspan') || '1', 10)
+        // 解析rowspan和colspan，确保值为有效数字
+        const rowspan = Math.max(1, parseInt(cell.getAttribute('rowspan') || '1', 10) || 1)
+        const colspan = Math.max(1, parseInt(cell.getAttribute('colspan') || '1', 10) || 1)
 
-        // 标记占用的位置
+        // 标记所有被当前单元格占用的位置
         for (let r = 0; r < rowspan; r++) {
           for (let c = 0; c < colspan; c++) {
             const targetRow = rowIndex + r
             const targetCol = colIndex + c
 
+            // 确保目标行存在且在范围内
             if (targetRow < rowCount) {
+              // 扩展行数组以容纳新列
+              while (occupied[targetRow].length <= targetCol) {
+                occupied[targetRow].push(false)
+              }
               occupied[targetRow][targetCol] = true
             }
           }
         }
 
+        // 更新表格的最大列数
         colCount = Math.max(colCount, colIndex + colspan)
         colIndex += colspan
       })
@@ -189,21 +201,45 @@ export class TableParser {
         }
 
         const attrString = attrs.length > 0 ? ' ' + attrs.join(' ') : ''
-        rowCells.push(`<td${attrString}>${cell.content}</td>`)
+        // 转义特殊字符，防止HTML注入
+        const safeContent = this.escapeHTML(cell.content)
+        rowCells.push(`<td${attrString}>${safeContent}</td>`)
       }
 
       if (rowCells.length > 0) {
+        const rowContent = rowCells.join('')
         if (options.compact) {
-          lines.push(`<tr>${rowCells.join('')}</tr>`)
+          lines.push(`<tr>${rowContent}</tr>`)
         } else {
-          lines.push(`<tr>${rowCells.join('')}</tr>`)
+          lines.push(`  <tr>${rowContent}</tr>`)
         }
       }
     }
 
-    lines.push('</table>')
+    if (options.compact) {
+      lines.push('</table>')
+    } else {
+      lines.push('</table>')
+    }
 
-    return options.compact ? lines.join('') : lines.join('')
+    return options.compact ? lines.join('') : lines.join('\n')
+  }
+
+  /**
+   * 转义HTML特殊字符
+   */
+  private static escapeHTML(content: string): string {
+    const escapedContent = content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+      // 恢复上标标签
+      .replace(/&lt;sup&gt;/g, '<sup>')
+      .replace(/&lt;\/sup&gt;/g, '</sup>')
+      
+    return escapedContent
   }
 
   /**

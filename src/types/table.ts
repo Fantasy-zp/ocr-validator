@@ -72,3 +72,12 @@ export interface TableValidationResult {
   errors?: string[]
   warnings?: string[]
 }
+
+// 表格历史记录操作
+export interface TableHistoryAction {
+  type: string
+  before: TableData
+  after: TableData
+  timestamp: number
+  metadata?: Record<string, unknown>
+}

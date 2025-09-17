@@ -49,6 +49,23 @@
 
       <el-divider direction="vertical" />
 
+      <el-button-group>
+        <el-button size="small" @click="undo" :disabled="!canUndo">
+          撤销
+        </el-button>
+        <el-button size="small" @click="redo" :disabled="!canRedo">
+          重做
+        </el-button>
+      </el-button-group>
+
+      <el-divider direction="vertical" />
+
+      <el-button size="small" @click="manualSave">
+        保存
+      </el-button>
+
+      <el-divider direction="vertical" />
+
       <el-button size="small" @click="toggleMode">
         <el-icon><Switch /></el-icon>
         {{ mode === 'visual' ? '源码模式' : '可视化模式' }}
@@ -83,7 +100,7 @@
                       type="text"
                       class="cell-input"
                       @blur="finishEdit"
-                      @keydown.enter.prevent="handleEnterKey"
+                      @keyup.enter.prevent="handleEnterKey"
                       @keydown.esc.prevent="cancelEdit"
                       :id="`cell-input-${rowIndex}-${colIndex}`"
                       placeholder="输入内容..."
@@ -132,6 +149,17 @@
         <template v-if="selectedRange">
           | 范围: {{ getRangeDescription() }}
         </template>
+        <template v-if="validationStatus">
+          | 状态: <span :class="{ 'text-success': validationStatus.valid, 'text-danger': !validationStatus.valid }">
+            {{ validationStatus.valid ? '有效' : '无效' }}
+          </span>
+        </template>
+        <template v-if="lastAutoSaveTime">
+          | 自动保存: {{ formatAutoSaveTime(lastAutoSaveTime) }}
+        </template>
+        <template v-if="history.length > 0">
+          | 历史: {{ historyIndex + 1 }}/{{ history.length }}
+        </template>
       </el-text>
     </div>
   </div>
@@ -139,19 +167,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import {
-  Connection,
-  Scissor,
-  Top,
-  Bottom,
-  Back,
-  Right,
-  DeleteFilled,
-  Switch
-} from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Connection, Scissor, Top, Bottom, Back, Right, DeleteFilled, Switch } from '@element-plus/icons-vue'
 import { TableParser } from '@/utils/tableParser'
-import type { TableData, CellPosition, CellRange, TableEditorMode } from '@/types/table'
+import { TableDataEnhancer } from '@/utils/tableDataEnhancer'
+import type { TableData, CellPosition, CellRange, TableEditorMode, TableHistoryAction, TableValidationResult } from '@/types/table'
 
 const props = withDefaults(defineProps<{
   html: string
@@ -189,17 +209,36 @@ const isDragging = ref(false)
 const dragStart = ref<CellPosition | null>(null)
 const dragEnd = ref<CellPosition | null>(null)
 
-// 计算属性
-const currentHTML = computed(() => {
-  return TableParser.generateHTMLFromTableData(tableData.value)
-})
+// 数据可靠性增强相关状态
+const history = ref<TableHistoryAction[]>([])
+const historyIndex = ref(-1)
+const validationStatus = ref<TableValidationResult | null>(null)
+const lastAutoSaveTime = ref<Date | null>(null)
+const autoSaveInterval = ref<number | null>(null)
+const maxHistoryLength = 30
+const saveStorageKey = ref(`table-editor-${Date.now()}`) // 使用时间戳确保唯一性
 
-const canMerge = computed(() => {
-  if (!selectedRange.value) return false
-  const { start, end } = selectedRange.value
-  // 至少选择2个单元格才能合并
-  return !(start.row === end.row && start.col === end.col)
-})
+// 计算属性
+  const currentHTML = computed(() => {
+    return TableParser.generateHTMLFromTableData(tableData.value)
+  })
+
+  const canMerge = computed(() => {
+    if (!selectedRange.value) return false
+    const { start, end } = selectedRange.value
+    // 至少选择2个单元格才能合并
+    return !(start.row === end.row && start.col === end.col)
+  })
+
+  const canUndo = computed(() => {
+    return historyIndex.value >= 0
+  })
+
+  const canRedo = computed(() => {
+    return historyIndex.value < history.value.length - 1
+  })
+
+
 
 const canSplit = computed(() => {
   if (!selectedCell.value) return false
@@ -225,8 +264,32 @@ const parseHTML = (html: string) => {
         )
       }
     } else {
-      tableData.value = TableParser.parseHTMLToTableData(html, { handleSuperscript: true })
+      // 尝试修复可能的问题
+      try {
+        tableData.value = TableParser.parseHTMLToTableData(html, { handleSuperscript: true })
+      } catch (parseError) {
+        console.warn('初始解析失败，尝试修复HTML:', parseError)
+        // 简单的HTML修复尝试
+        const fixedHtml = html
+          .replace(/<table[^>]*>/i, '<table>')
+          .replace(/<\/?tbody>/gi, '')
+          .replace(/<\/?thead>/gi, '')
+          .replace(/<\/?tr[^>]*>/gi, (match) => match.replace(/[^>]*>/, '>'))
+          .replace(/<\/?td[^>]*>/gi, (match) => {
+            // 只保留rowspan和colspan属性
+            const rowspan = match.match(/rowspan="(\d+)"/i)?.[1] || '1'
+            const colspan = match.match(/colspan="(\d+)"/i)?.[1] || '1'
+            return match.startsWith('</') ? '</td>' : `<td rowspan="${rowspan}" colspan="${colspan}">`
+          })
+        
+        // 再次尝试解析
+        tableData.value = TableParser.parseHTMLToTableData(fixedHtml, { handleSuperscript: true })
+      }
     }
+    
+    // 验证解析后的数据
+    validateTableData()
+    
     sourceHTML.value = html
   } catch (error) {
     console.error('解析HTML失败:', error)
@@ -244,12 +307,26 @@ const parseHTML = (html: string) => {
         }))
       )
     }
+    validateTableData()
   }
 }
 
 const emitUpdate = () => {
+  // 验证数据后再更新
+  if (!validateTableData()) {
+    // 数据无效时尝试修复
+    const repairedData = TableDataEnhancer.tryRepairTableData(tableData.value)
+    if (repairedData) {
+      tableData.value = repairedData
+      validateTableData()
+    }
+  }
+  
   const html = TableParser.generateHTMLFromTableData(tableData.value)
   emit('update', html)
+  
+  // 触发自动保存
+  scheduleAutoSave()
 }
 
 const selectCell = (row: number, col: number) => {
@@ -258,6 +335,14 @@ const selectCell = (row: number, col: number) => {
     selectedCell.value = { row, col }
     selectedRange.value = null
   }
+}
+
+/**
+ * 格式化自动保存时间
+ */
+const formatAutoSaveTime = (date: Date | null): string => {
+  if (!date) return ''
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
 }
 
 const startEdit = async (row: number, col: number) => {
@@ -273,11 +358,217 @@ const startEdit = async (row: number, col: number) => {
   await nextTick()
   const input = document.getElementById(`cell-input-${row}-${col}`) as HTMLInputElement
   if (input) {
+    // 自动调整输入框大小以适应内容
+    adjustInputSize(input, cell.content)
     input.focus()
     input.select()
   }
 }
 
+// 自动调整输入框大小以适应内容
+const adjustInputSize = (input: HTMLInputElement, content: string) => {
+  // 创建临时元素来测量文本宽度
+  const tempSpan = document.createElement('span')
+  tempSpan.style.visibility = 'hidden'
+  tempSpan.style.position = 'absolute'
+  tempSpan.style.whiteSpace = 'nowrap'
+  tempSpan.style.fontSize = getComputedStyle(input).fontSize
+  tempSpan.style.fontFamily = getComputedStyle(input).fontFamily
+  tempSpan.textContent = content
+  
+  document.body.appendChild(tempSpan)
+  const width = tempSpan.offsetWidth + 20 // 增加一些边距
+  document.body.removeChild(tempSpan)
+  
+  // 设置最小和最大宽度
+  input.style.width = `${Math.max(60, Math.min(500, width))}px`
+}
+
+// 添加防抖函数
+const debounce = <T extends (...args: unknown[]) => unknown>(func: T, wait: number) => {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  return function(this: unknown, ...args: Parameters<T>) {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+    timeout = setTimeout(() => {
+      func.apply(this, args)
+      timeout = null
+    }, wait)
+  }
+}
+
+/**
+ * 验证表格数据
+ * @returns 数据是否有效
+ */
+const validateTableData = (): boolean => {
+  try {
+    const result = TableDataEnhancer.validateTableData(tableData.value)
+    validationStatus.value = result
+    
+    if (!result.valid && result.errors?.length) {
+      console.warn('表格数据验证失败:', result.errors)
+      // 只显示第一条错误
+      ElMessage({ 
+        message: `表格验证警告: ${result.errors[0]}`, 
+        type: 'warning',
+        duration: 5000
+      })
+    } else if (result.warnings?.length) {
+      console.warn('表格数据验证警告:', result.warnings)
+      // 可以选择是否显示警告
+    }
+    
+    return result.valid
+  } catch (error) {
+    console.error('验证表格数据失败:', error)
+    validationStatus.value = { valid: false, errors: ['验证过程出错'] }
+    return false
+  }
+}
+
+/**
+ * 执行表格操作并记录历史
+ * @param operation 操作函数
+ * @param type 操作类型
+ * @param metadata 操作元数据
+ */
+const executeTableOperation = (
+  operation: (data: TableData) => TableData,
+  type: string,
+  metadata: Record<string, unknown> = {}
+): boolean => {
+  try {
+    // 保存操作前的状态
+    const beforeState = TableDataEnhancer.createSnapshot(tableData.value)
+    
+    // 执行操作
+    const result = TableDataEnhancer.executeBatchOperations(tableData.value, [operation])
+    
+    if (!result.success) {
+      ElMessage.error(`操作失败: ${result.error}`)
+      return false
+    }
+    
+    // 更新表格数据
+    tableData.value = result.data
+    
+    // 添加历史记录
+    const action = TableDataEnhancer.createHistoryAction(
+      type,
+      beforeState,
+      TableDataEnhancer.createSnapshot(tableData.value),
+      metadata
+    )
+    
+    // 添加到历史记录
+    if (historyIndex.value < history.value.length - 1) {
+      history.value.splice(historyIndex.value + 1)
+    }
+    history.value.push(action)
+    historyIndex.value++
+    
+    // 限制历史记录长度
+    if (history.value.length > maxHistoryLength) {
+      history.value.shift()
+      historyIndex.value--
+    }
+    
+    return true
+  } catch (err) {
+      console.error(`执行${type}操作失败:`, err)
+      ElMessage.error(`执行操作失败: ${err instanceof Error ? err.message : '未知错误'}`)
+      return false
+    }
+}
+
+/**
+ * 撤销操作
+ */
+const undo = (): void => {
+  if (!canUndo.value) return
+  
+  try {
+    const action = history.value[historyIndex.value]
+    tableData.value = TableDataEnhancer.executeHistoryAction(action, 'undo')
+    historyIndex.value--
+    emitUpdate()
+    ElMessage.success('已撤销操作')
+  } catch (error) {
+    console.error('撤销操作失败:', error)
+    ElMessage.error('撤销操作失败')
+  }
+}
+
+/**
+ * 重做操作
+ */
+const redo = (): void => {
+  if (!canRedo.value) return
+  
+  try {
+    historyIndex.value++
+    const action = history.value[historyIndex.value]
+    tableData.value = TableDataEnhancer.executeHistoryAction(action, 'redo')
+    emitUpdate()
+    ElMessage.success('已重做操作')
+  } catch (error) {
+    console.error('重做操作失败:', error)
+    ElMessage.error('重做操作失败')
+  }
+}
+
+/**
+ * 自动保存
+ */
+const autoSave = (): void => {
+  try {
+    const saveData = TableDataEnhancer.exportTableData(tableData.value)
+    localStorage.setItem(saveStorageKey.value, saveData)
+    lastAutoSaveTime.value = new Date()
+    console.log('表格数据已自动保存')
+  } catch (error) {
+    console.error('自动保存失败:', error)
+  }
+}
+
+/**
+ * 计划自动保存
+ */
+const scheduleAutoSave = (): void => {
+  if (autoSaveInterval.value) {
+    clearTimeout(autoSaveInterval.value)
+  }
+  
+  // 5秒后自动保存
+  autoSaveInterval.value = window.setTimeout(() => {
+    autoSave()
+  }, 5000)
+}
+
+/**
+ * 手动保存
+ */
+const manualSave = async (): Promise<void> => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要保存当前表格数据吗？\n保存后可在下次打开时恢复。',
+      '保存确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+    
+    autoSave()
+    ElMessage.success('表格数据已保存')
+  } catch {
+    // 用户取消保存
+  }
+}
+        
 const finishEdit = () => {
   if (editingCell.value) {
     const { row, col } = editingCell.value
@@ -285,8 +576,7 @@ const finishEdit = () => {
     editingCell.value = null
     editingContent.value = ''
     emitUpdate()
-    // 强制触发更新，确保父组件能接收到变化
-    tableData.value = { ...tableData.value }
+    
   }
 }
 
@@ -354,18 +644,29 @@ const handleCellMouseDown = (row: number, col: number, event: MouseEvent) => {
   // 如果是右键，不处理
   if (event.button !== 0) return
 
+  // 忽略虚拟单元格的拖拽
+  const cell = tableData.value.cells[row][col]
+  if (cell.isVirtual) {
+    return
+  }
+
   // 开始拖拽
   isDragging.value = true
   dragStart.value = { row, col }
   dragEnd.value = { row, col }
 
-  // 阻止文本选择
+  // 阻止文本选择和默认行为
   event.preventDefault()
+  event.stopPropagation()
 }
 
 const handleCellMouseEnter = (row: number, col: number) => {
   if (isDragging.value && dragStart.value) {
-    dragEnd.value = { row, col }
+    // 确保拖拽范围在有效单元格内
+    const cell = tableData.value.cells[row][col]
+    if (!cell.isVirtual) {
+      dragEnd.value = { row, col }
+    }
   }
 }
 
@@ -404,85 +705,169 @@ const handleTableMouseLeave = () => {
 }
 
 const handleMergeCells = () => {
-  if (!selectedRange.value) return
+    if (!selectedRange.value) return
 
-  const { start, end } = selectedRange.value
-  tableData.value = TableParser.mergeCells(
-    tableData.value,
-    start.row,
-    start.col,
-    end.row,
-    end.col
-  )
+    const { start, end } = selectedRange.value
+    
+    // 验证合并操作是否有效
+    const canMerge = validateMergeOperation(tableData.value, start, end)
+    if (!canMerge) {
+      ElMessage.warning('无法合并包含不可合并单元格的区域')
+      return
+    }
 
-  selectedRange.value = null
-  emitUpdate()
-  ElMessage.success('单元格已合并')
+    const success = executeTableOperation(
+      (data) => TableParser.mergeCells(
+        data,
+        start.row,
+        start.col,
+        end.row,
+        end.col
+      ),
+      'merge_cells',
+      {
+        range: {
+          startRow: start.row,
+          startCol: start.col,
+          endRow: end.row,
+          endCol: end.col
+        }
+      }
+    )
+    
+    if (success) {
+      selectedRange.value = null
+      emitUpdate()
+      ElMessage.success('单元格已合并')
+    }
+  }
+
+// 验证合并操作是否有效
+const validateMergeOperation = (tableData: TableData, start: CellPosition, end: CellPosition): boolean => {
+  const minRow = Math.min(start.row, end.row)
+  const maxRow = Math.max(start.row, end.row)
+  const minCol = Math.min(start.col, end.col)
+  const maxCol = Math.max(start.col, end.col)
+
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      const cell = tableData.cells[r][c]
+      // 如果范围内包含合并单元格，则无法合并
+      if (!cell.isVirtual && (cell.rowspan > 1 || cell.colspan > 1)) {
+        return false
+      }
+    }
+  }
+  return true
 }
 
 const handleSplitCell = () => {
-  if (!selectedCell.value) return
+    if (!selectedCell.value) return
 
-  const { row, col } = selectedCell.value
-  const cell = tableData.value.cells[row][col]
+    const { row, col } = selectedCell.value
+    const cell = tableData.value.cells[row][col]
 
-  if (cell.isVirtual) {
-    ElMessage.warning('无法拆分虚拟单元格')
-    return
+    if (cell.isVirtual) {
+      ElMessage.warning('无法拆分虚拟单元格')
+      return
+    }
+
+    const success = executeTableOperation(
+      (data) => TableParser.splitCell(data, row, col),
+      'split_cell',
+      {
+        position: { row, col },
+        original: { rowspan: cell.rowspan, colspan: cell.colspan }
+      }
+    )
+    
+    if (success) {
+      emitUpdate()
+      ElMessage.success('单元格已拆分')
+    }
   }
-
-  tableData.value = TableParser.splitCell(tableData.value, row, col)
-  emitUpdate()
-  ElMessage.success('单元格已拆分')
-}
 
 const handleInsertRow = (before: boolean) => {
-  if (!selectedCell.value) return
+    if (!selectedCell.value) return
 
-  const position = selectedCell.value.row
-  tableData.value = TableParser.insertRow(tableData.value, position, before)
-  emitUpdate()
-  ElMessage.success(`已在${before ? '上方' : '下方'}插入行`)
-}
+    const position = selectedCell.value.row
+    
+    const success = executeTableOperation(
+      (data) => TableParser.insertRow(data, position, before),
+      'insert_row',
+      { position, before }
+    )
+    
+    if (success) {
+      emitUpdate()
+      ElMessage.success(`已在${before ? '上方' : '下方'}插入行`)
+    }
+  }
 
 const handleDeleteRow = () => {
-  if (!selectedCell.value) return
+    if (!selectedCell.value) return
 
-  if (tableData.value.rows <= 1) {
-    ElMessage.warning('不能删除最后一行')
-    return
+    if (tableData.value.rows <= 1) {
+      ElMessage.warning('不能删除最后一行')
+      return
+    }
+
+    const { row } = selectedCell.value
+    
+    const success = executeTableOperation(
+      (data) => TableParser.deleteRow(data, row),
+      'delete_row',
+      { position: row }
+    )
+    
+    if (success) {
+      selectedCell.value = null
+      selectedRange.value = null
+      emitUpdate()
+      ElMessage.success('行已删除')
+    }
   }
-
-  tableData.value = TableParser.deleteRow(tableData.value, selectedCell.value.row)
-  selectedCell.value = null
-  selectedRange.value = null
-  emitUpdate()
-  ElMessage.success('行已删除')
-}
 
 const handleInsertColumn = (before: boolean) => {
-  if (!selectedCell.value) return
+    if (!selectedCell.value) return
 
-  const position = selectedCell.value.col
-  tableData.value = TableParser.insertColumn(tableData.value, position, before)
-  emitUpdate()
-  ElMessage.success(`已在${before ? '左侧' : '右侧'}插入列`)
-}
-
-const handleDeleteColumn = () => {
-  if (!selectedCell.value) return
-
-  if (tableData.value.cols <= 1) {
-    ElMessage.warning('不能删除最后一列')
-    return
+    const position = selectedCell.value.col
+    
+    const success = executeTableOperation(
+      (data) => TableParser.insertColumn(data, position, before),
+      'insert_column',
+      { position, before }
+    )
+    
+    if (success) {
+      emitUpdate()
+      ElMessage.success(`已在${before ? '左侧' : '右侧'}插入列`)
+    }
   }
 
-  tableData.value = TableParser.deleteColumn(tableData.value, selectedCell.value.col)
-  selectedCell.value = null
-  selectedRange.value = null
-  emitUpdate()
-  ElMessage.success('列已删除')
-}
+const handleDeleteColumn = () => {
+    if (!selectedCell.value) return
+
+    if (tableData.value.cols <= 1) {
+      ElMessage.warning('不能删除最后一列')
+      return
+    }
+
+    const { col } = selectedCell.value
+    
+    const success = executeTableOperation(
+      (data) => TableParser.deleteColumn(data, col),
+      'delete_column',
+      { position: col }
+    )
+    
+    if (success) {
+      selectedCell.value = null
+      selectedRange.value = null
+      emitUpdate()
+      ElMessage.success('列已删除')
+    }
+  }
 
 const toggleMode = () => {
   if (mode.value === 'visual') {
@@ -512,37 +897,80 @@ const getRangeDescription = () => {
 
 // 键盘快捷键
 const handleKeyboard = (e: KeyboardEvent) => {
-  // 如果正在编辑，不处理导航键
-  if (editingCell.value) return
+  // 如果正在编辑，只处理特定按键
+  if (editingCell.value) {
+    return
+  }
 
-  if (!selectedCell.value) return
+  // 检查是否是快捷键组合
+  if (e.ctrlKey || e.metaKey) {
+    switch (e.key.toLowerCase()) {
+      case 'z':
+        // Ctrl+Z 撤销
+        e.preventDefault()
+        undo()
+        return
+      case 'y':
+        // Ctrl+Y 重做
+        e.preventDefault()
+        redo()
+        return
+      case 's':
+        // Ctrl+S 保存
+        e.preventDefault()
+        manualSave()
+        return
+    }
+  }
+
+  if (!selectedCell.value) {
+    // 如果没有选中单元格，按下Enter键选中第一个单元格
+    if (e.key === 'Enter' && tableData.value.rows > 0 && tableData.value.cols > 0) {
+      selectCell(0, 0)
+      e.preventDefault()
+    }
+    return
+  }
 
   const { row, col } = selectedCell.value
+  const { rows, cols } = tableData.value
 
   switch (e.key) {
     case 'ArrowUp':
-      if (row > 0) {
+      // 支持循环导航到最后一行
+      if (e.shiftKey && row === 0) {
+        selectCell(rows - 1, col)
+      } else if (row > 0) {
         selectCell(row - 1, col)
-        e.preventDefault()
       }
+      e.preventDefault()
       break
     case 'ArrowDown':
-      if (row < tableData.value.rows - 1) {
+      // 支持循环导航到第一行
+      if (e.shiftKey && row === rows - 1) {
+        selectCell(0, col)
+      } else if (row < rows - 1) {
         selectCell(row + 1, col)
-        e.preventDefault()
       }
+      e.preventDefault()
       break
     case 'ArrowLeft':
-      if (col > 0) {
+      // 支持循环导航到最后一列
+      if (e.shiftKey && col === 0) {
+        selectCell(row, cols - 1)
+      } else if (col > 0) {
         selectCell(row, col - 1)
-        e.preventDefault()
       }
+      e.preventDefault()
       break
     case 'ArrowRight':
-      if (col < tableData.value.cols - 1) {
+      // 支持循环导航到第一列
+      if (e.shiftKey && col === cols - 1) {
+        selectCell(row, 0)
+      } else if (col < cols - 1) {
         selectCell(row, col + 1)
-        e.preventDefault()
       }
+      e.preventDefault()
       break
     case 'Enter':
       if (!editingCell.value) {
@@ -553,9 +981,24 @@ const handleKeyboard = (e: KeyboardEvent) => {
     case 'Delete':
     case 'Backspace':
       if (!editingCell.value && selectedCell.value) {
-        // 清空单元格内容
-        tableData.value.cells[row][col].content = ''
-        emitUpdate()
+        // 使用executeTableOperation来记录历史
+        executeTableOperation(
+          (data) => {
+            const newData = TableDataEnhancer.createSnapshot(data)
+            newData.cells[row][col].content = ''
+            return newData
+          },
+          'clear_cell',
+          { position: { row, col } }
+        )
+        e.preventDefault()
+      }
+      break
+    case 'Escape':
+      // 取消选择
+      if (selectedCell.value || selectedRange.value) {
+        selectedCell.value = null
+        selectedRange.value = null
         e.preventDefault()
       }
       break
@@ -574,19 +1017,103 @@ onMounted(() => {
   parseHTML(props.html || '')
   document.addEventListener('keydown', handleKeyboard)
   document.addEventListener('mouseup', handleGlobalMouseUp)
+  
+  // 尝试从自动保存恢复数据
+  try {
+      const savedData = localStorage.getItem(saveStorageKey.value)
+      if (savedData) {
+        ElMessageBox.confirm(
+          '检测到上次的自动保存数据，是否恢复？',
+          '恢复数据',
+          {
+            confirmButtonText: '恢复',
+            cancelButtonText: '跳过',
+            type: 'info'
+          }
+        ).then(() => {
+          const restoredData = TableDataEnhancer.importTableData(savedData)
+          tableData.value = restoredData
+          emitUpdate()
+          ElMessage.success('已从自动保存恢复表格数据')
+        }).catch(() => {
+          // 用户选择跳过恢复
+        })
+      }
+    } catch (error) {
+      console.error('尝试恢复自动保存数据时出错:', error)
+    }
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyboard)
   document.removeEventListener('mouseup', handleGlobalMouseUp)
+  
+  // 清除自动保存定时器
+  if (autoSaveInterval.value) {
+    clearTimeout(autoSaveInterval.value)
+  }
+  
+  // 执行最终的自动保存
+  autoSave()
 })
 
 // 监听HTML变化
-watch(() => props.html, (newHTML) => {
-  if (newHTML !== currentHTML.value) {
-    parseHTML(newHTML)
-  }
-})
+  watch(() => props.html, (newHTML) => {
+    if (newHTML !== currentHTML.value && newHTML) {
+      try {
+        const parsedData = TableParser.parseHTMLToTableData(newHTML, { handleSuperscript: true })
+        if (parsedData) {
+          // 验证解析的数据
+          const validationResult = TableDataEnhancer.validateTableData(parsedData)
+          
+          if (validationResult.valid) {
+            // 创建快照并添加历史记录
+            const beforeState = TableDataEnhancer.createSnapshot(tableData.value)
+            tableData.value = parsedData
+            
+            // 添加HTML更新的历史记录
+            const action = TableDataEnhancer.createHistoryAction(
+              'html_update',
+              beforeState,
+              TableDataEnhancer.createSnapshot(tableData.value),
+              { source: 'external' }
+            )
+            
+            history.value = [action] // 重置历史记录
+            historyIndex.value = 0
+            
+            // 重置选择和编辑状态
+            selectedCell.value = null
+            selectedRange.value = null
+            editingCell.value = null
+            editingContent.value = ''
+            
+            validateTableData()
+            sourceHTML.value = newHTML
+          } else {
+            // 数据无效时尝试修复
+            const repairedData = TableDataEnhancer.tryRepairTableData(parsedData)
+            if (repairedData) {
+              tableData.value = repairedData
+              validateTableData()
+              selectedCell.value = null
+              selectedRange.value = null
+              editingCell.value = null
+              editingContent.value = ''
+              sourceHTML.value = newHTML
+              ElMessage.warning('HTML解析后的数据已自动修复')
+            } else {
+              console.error('解析的HTML数据无效，无法修复:', validationResult.errors)
+              ElMessage.error('解析HTML数据失败：数据格式无效')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('解析HTML失败:', error)
+        ElMessage.error(`解析HTML失败：${error instanceof Error ? error.message : '未知错误'}`)
+      }
+    }
+  })
 </script>
 
 <style lang="scss" scoped>

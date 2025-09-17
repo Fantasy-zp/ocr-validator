@@ -37,20 +37,20 @@
           <el-col :span="8">
             <el-form-item label="类型">
               <el-select v-model="editForm.category_type" placeholder="Select type">
-                  <el-option label="title" value="title" />
-                  <el-option label="text" value="text" />
-                  <el-option label="footnote" value="footnote" />
-                  <el-option label="chart_caption" value="chart_caption" />
-                  <el-option label="chart" value="chart" />
-                  <el-option label="chart_footnote" value="chart_footnote" />
-                  <el-option label="table_caption" value="table_caption" />
-                  <el-option label="table" value="table" />
-                  <el-option label="table_footnote" value="table_footnote" />
-                  <el-option label="page_footnote" value="page_footnote" />
-                  <el-option label="figure_caption" value="figure_caption" />
-                  <el-option label="figure" value="figure" />
-                  <el-option label="figure_footnote" value="figure_footnote" />
-                </el-select>
+                <el-option label="title" value="title" />
+                <el-option label="text" value="text" />
+                <el-option label="footnote" value="footnote" />
+                <el-option label="chart_caption" value="chart_caption" />
+                <el-option label="chart" value="chart" />
+                <el-option label="chart_footnote" value="chart_footnote" />
+                <el-option label="table_caption" value="table_caption" />
+                <el-option label="table" value="table" />
+                <el-option label="table_footnote" value="table_footnote" />
+                <el-option label="page_footnote" value="page_footnote" />
+                <el-option label="figure_caption" value="figure_caption" />
+                <el-option label="figure" value="figure" />
+                <el-option label="figure_footnote" value="figure_footnote" />
+              </el-select>
             </el-form-item>
           </el-col>
 
@@ -64,7 +64,7 @@
             <el-form-item label="坐标">
               <el-row :gutter="10">
                 <el-col :span="6" style="display: flex; align-items: center;">
-                  <span style="margin-right: 5px;">x1:</span>
+                  <span>x1:</span>
                   <el-input-number v-model="editForm.poly[0]" :min="0" style="flex: 1;" />
                 </el-col>
                 <el-col :span="6" style="display: flex; align-items: center;">
@@ -72,7 +72,7 @@
                   <el-input-number v-model="editForm.poly[1]" :min="0" style="flex: 1;" />
                 </el-col>
                 <el-col :span="6" style="display: flex; align-items: center;">
-                  <span style="margin-right: 5px;">x2:</span>
+                  <span>x2:</span>
                   <el-input-number v-model="editForm.poly[2]" :min="0" style="flex: 1;" />
                 </el-col>
                 <el-col :span="6" style="display: flex; align-items: center;">
@@ -86,9 +86,9 @@
 
         <el-row>
           <el-col :span="24">
-            <el-form-item :label="editForm.category_type === 'table' ? 'HTML' : '文本'">
-              <el-input v-if="editForm.category_type === 'table'" v-model="editForm.html" type="textarea" :rows="3"
-                placeholder="输入HTML内容" />
+            <el-form-item :label="editForm.category_type === 'table' ? '表格' : '文本'">
+              <TableEditor v-if="editForm.category_type === 'table'" :html="editForm.html" @update="handleTableUpdate"
+                show-toolbar />
               <el-input v-else v-model="editForm.text" type="textarea" :rows="3" placeholder="输入文本内容" />
             </el-form-item>
           </el-col>
@@ -123,35 +123,56 @@
     <el-form :model="newElementForm" label-width="100px">
       <el-form-item label="类型" required>
         <el-select v-model="newElementForm.category_type" placeholder="选择类型">
-          <el-option label="文本" value="text" />
-          <el-option label="表格" value="table" />
-          <el-option label="表格标题" value="table_caption" />
-          <el-option label="表格脚注" value="table_footnote" />
-          <el-option label="标题" value="title" />
+          <el-option label="text" value="text" />
+          <el-option label="title" value="title" />
+          <el-option label="footnote" value="footnote" />
+          <el-option label="chart_caption" value="chart_caption" />
+          <el-option label="chart" value="chart" />
+          <el-option label="chart_footnote" value="chart_footnote" />
+          <el-option label="table" value="table" />
+          <el-option label="table_caption" value="table_caption" />
+          <el-option label="table_footnote" value="table_footnote" />
+          <el-option label="page_footnote" value="page_footnote" />
+          <el-option label="figure_caption" value="figure_caption" />
+          <el-option label="figure" value="figure" />
+          <el-option label="figure_footnote" value="figure_footnote" />
         </el-select>
       </el-form-item>
 
+      <el-form-item label="顺序" required>
+        <el-input-number v-model="newElementForm.order" :min="0" />
+      </el-form-item>
+
       <el-form-item label="内容" required>
-        <el-input v-if="newElementForm.category_type === 'table'" v-model="newElementForm.html" type="textarea"
-          :rows="5" placeholder="输入HTML内容" />
+        <TableEditor v-if="newElementForm.category_type === 'table'" :html="newElementForm.html"
+          @update="handleNewTableUpdate" show-toolbar />
         <el-input v-else v-model="newElementForm.text" type="textarea" :rows="5" placeholder="输入文本内容" />
       </el-form-item>
 
       <el-form-item label="坐标" required>
-        <el-row :gutter="10">
-          <el-col :span="6">
-            <el-input-number v-model="newElementForm.x1" placeholder="x1" />
-          </el-col>
-          <el-col :span="6">
-            <el-input-number v-model="newElementForm.y1" placeholder="y1" />
-          </el-col>
-          <el-col :span="6">
-            <el-input-number v-model="newElementForm.x2" placeholder="x2" />
-          </el-col>
-          <el-col :span="6">
-            <el-input-number v-model="newElementForm.y2" placeholder="y2" />
-          </el-col>
-        </el-row>
+        <!-- 坐标输入框 -->
+        <div style="width: 100%;">
+          <el-row :gutter="15" style="margin-bottom: 10px;">
+            <el-col :span="12" style="display: flex; align-items: center;">
+              <span style="margin-right: 5px; min-width: 25px; text-align: left; font-size: 14px; color: #606266;">x1:</span>
+              <el-input-number v-model="newElementForm.x1" style="flex: 1; width: 100%; border-radius: 4px; transition: all 0.3s ease;" placeholder="左上角" />
+            </el-col>
+            <el-col :span="12" style="display: flex; align-items: center;">
+              <span style="margin-right: 5px; min-width: 25px; text-align: left; font-size: 14px; color: #606266;">y1:</span>
+              <el-input-number v-model="newElementForm.y1" style="flex: 1; width: 100%; border-radius: 4px; transition: all 0.3s ease;" placeholder="左上角" />
+            </el-col>
+          </el-row>
+          <el-row :gutter="15">
+            <el-col :span="12" style="display: flex; align-items: center;">
+              <span style="margin-right: 5px; min-width: 25px; text-align: left; font-size: 14px; color: #606266;">x2:</span>
+              <el-input-number v-model="newElementForm.x2" style="flex: 1; width: 100%; border-radius: 4px; transition: all 0.3s ease;" placeholder="右下角" />
+            </el-col>
+            <el-col :span="12" style="display: flex; align-items: center;">
+              <span style="margin-right: 5px; min-width: 25px; text-align: left; font-size: 14px; color: #606266;">y2:</span>
+              <el-input-number v-model="newElementForm.y2" style="flex: 1; width: 100%; border-radius: 4px; transition: all 0.3s ease;" placeholder="右下角" />
+            </el-col>
+          </el-row>
+        </div>
       </el-form-item>
     </el-form>
 
@@ -176,6 +197,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
 import type { LayoutElement, ElementType } from '@/types'
+import TableEditor from './TableEditor.vue'
 
 const ocrStore = useOCRValidationStore()
 
@@ -214,11 +236,22 @@ const newElementForm = reactive({
   category_type: 'text' as ElementType,
   text: '',
   html: '',
+  order: 0,
   x1: 0,
   y1: 0,
   x2: 100,
   y2: 100
 })
+
+// 处理表格编辑器更新
+const handleTableUpdate = (html: string) => {
+  editForm.html = html
+}
+
+// 处理新元素对话框中的表格编辑器更新
+const handleNewTableUpdate = (html: string) => {
+  newElementForm.html = html
+}
 
 // 监听选中元素变化
 watch(selectedElement, (elem) => {

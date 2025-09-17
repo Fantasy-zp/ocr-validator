@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF标注修改系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1600px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 25px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2.2em;
+        margin-bottom: 8px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+      }
+
+      .controls {
+        padding: 20px;
+        background: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .upload-section {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .file-input-wrapper {
+        position: relative;
+        overflow: hidden;
+        display: inline-block;
+      }
+
+      .file-input-wrapper input[type="file"] {
+        display: none;
+      }
+
+      .file-input-label {
+        display: inline-block;
+        padding: 10px 25px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 25px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 600;
+        font-size: 14px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .file-input-label:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+      }
+
+      .json-upload-label {
+        background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+        box-shadow: 0 4px 15px rgba(0, 184, 148, 0.4);
+      }
+
+      .json-upload-label:hover {
+        box-shadow: 0 6px 20px rgba(0, 184, 148, 0.5);
+      }
+
+      .tool-buttons {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        background: white;
+        padding: 5px 10px;
+        border-radius: 8px;
+      }
+
+      .tool-btn {
+        padding: 8px 16px;
+        background: white;
+        border: 2px solid #dee2e6;
+        color: #6c757d;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .tool-btn:hover {
+        border-color: #667eea;
+        color: #667eea;
+        transform: translateY(-1px);
+      }
+
+      .tool-btn.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      .tool-btn.add-mode {
+        background: #27ae60;
+        color: white;
+        border-color: #27ae60;
+      }
+
+      .tool-btn.add-mode:hover {
+        background: #229954;
+        border-color: #229954;
+      }
+
+      .tool-btn.delete-btn {
+        background: #e74c3c;
+        color: white;
+        border-color: #e74c3c;
+      }
+
+      .tool-btn.delete-btn:hover {
+        background: #c0392b;
+        border-color: #c0392b;
+      }
+
+      .scale-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        background: white;
+        padding: 5px 10px;
+        border-radius: 8px;
+      }
+
+      .scale-info {
+        font-size: 14px;
+        color: #495057;
+        font-weight: 600;
+        min-width: 100px;
+        text-align: center;
+      }
+
+      .scale-controls button {
+        padding: 6px 12px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.3s ease;
+      }
+
+      .scale-controls button:hover {
+        background: #5567d8;
+        transform: translateY(-1px);
+      }
+
+      .scale-controls button.active {
+        background: #27ae60;
+      }
+
+      .page-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-left: auto;
+      }
+
+      .page-controls button {
+        padding: 8px 16px;
+        background: white;
+        border: 2px solid #667eea;
+        color: #667eea;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+      }
+
+      .page-controls button:hover:not(:disabled) {
+        background: #667eea;
+        color: white;
+        transform: translateY(-2px);
+      }
+
+      .page-controls button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .page-info {
+        padding: 8px 16px;
+        background: white;
+        border-radius: 8px;
+        font-weight: 600;
+        color: #495057;
+      }
+
+      .main-content {
+        display: flex;
+        gap: 20px;
+        padding: 20px;
+        min-height: 600px;
+      }
+
+      .pdf-container {
+        flex: 1;
+        position: relative;
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 500px;
+        overflow: auto;
+        max-height: 800px;
+      }
+
+      .pdf-container.add-mode {
+        cursor: crosshair;
+      }
+
+      .canvas-wrapper {
+        position: relative;
+        display: inline-block;
+      }
+
+      #pdf-canvas {
+        display: block;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 4px;
+      }
+
+      .annotation-box {
+        position: absolute;
+        border: 2px solid #e74c3c;
+        background: rgba(231, 76, 60, 0.1);
+        cursor: move;
+        transition: all 0.2s ease;
+      }
+
+      .annotation-box.selected {
+        border: 3px solid #3498db;
+        background: rgba(52, 152, 219, 0.2);
+        z-index: 100;
+      }
+
+      .annotation-box:hover {
+        background: rgba(231, 76, 60, 0.2);
+      }
+
+      .annotation-box.selected:hover {
+        background: rgba(52, 152, 219, 0.3);
+      }
+
+      .annotation-box .resize-handle {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        background: #fff;
+        border: 2px solid #3498db;
+        display: none;
+      }
+
+      .annotation-box.selected .resize-handle {
+        display: block;
+      }
+
+      .resize-handle.nw {
+        top: -4px;
+        left: -4px;
+        cursor: nw-resize;
+      }
+      .resize-handle.ne {
+        top: -4px;
+        right: -4px;
+        cursor: ne-resize;
+      }
+      .resize-handle.sw {
+        bottom: -4px;
+        left: -4px;
+        cursor: sw-resize;
+      }
+      .resize-handle.se {
+        bottom: -4px;
+        right: -4px;
+        cursor: se-resize;
+      }
+
+      .annotation-label {
+        position: absolute;
+        top: -25px;
+        left: 0;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 101;
+      }
+
+      .delete-handle {
+        position: absolute;
+        top: -30px;
+        right: 0;
+        width: 20px;
+        height: 20px;
+        background: #e74c3c;
+        color: white;
+        border-radius: 50%;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 12px;
+        z-index: 102;
+      }
+
+      .annotation-box.selected .delete-handle {
+        display: flex;
+      }
+
+      .delete-handle:hover {
+        background: #c0392b;
+        transform: scale(1.1);
+      }
+
+      .drawing-box {
+        position: absolute;
+        border: 2px dashed #27ae60;
+        background: rgba(39, 174, 96, 0.1);
+        pointer-events: none;
+      }
+
+      .sidebar {
+        width: 450px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .sidebar-header {
+        background: #f8f9fa;
+        padding: 15px;
+        border-bottom: 2px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .sidebar h3 {
+        color: #495057;
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .entity-count {
+        background: #667eea;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .json-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 15px;
+      }
+
+      .entity-item {
+        background: #f8f9fa;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        user-select: none;
+      }
+
+      .entity-item:hover {
+        border-color: #667eea;
+        transform: translateX(5px);
+      }
+
+      .entity-item.selected {
+        border-color: #3498db;
+        background: #e3f2fd;
+        box-shadow: 0 3px 10px rgba(52, 152, 219, 0.2);
+      }
+
+      .entity-item.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+        z-index: 1000;
+      }
+
+      .entity-item.drag-over {
+        border-color: #27ae60;
+        border-width: 3px;
+        border-style: dashed;
+        background: rgba(39, 174, 96, 0.1);
+      }
+
+      .drag-handle {
+        position: absolute;
+        left: -5px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 24px;
+        height: 40px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        cursor: grab;
+        color: #adb5bd;
+        font-size: 16px;
+        transition: all 0.3s ease;
+      }
+
+      .drag-handle:hover {
+        color: #667eea;
+        transform: translateY(-50%) scale(1.2);
+      }
+
+      .drag-handle:active {
+        cursor: grabbing;
+        color: #5567d8;
+      }
+
+      .drag-handle::before {
+        content: "⋮⋮";
+        letter-spacing: -2px;
+        font-weight: bold;
+      }
+
+      .entity-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        margin-left: 15px;
+      }
+
+      .entity-type {
+        font-weight: 600;
+        color: #667eea;
+        font-size: 14px;
+      }
+
+      .entity-type-select {
+        padding: 4px 8px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 12px;
+        background: white;
+        color: #495057;
+        cursor: pointer;
+      }
+
+      .entity-type-select:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .entity-order {
+        background: #667eea;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+      }
+
+      .entity-text {
+        color: #6c757d;
+        font-size: 12px;
+        margin-bottom: 8px;
+        max-height: 60px;
+        overflow-y: auto;
+        padding: 5px;
+        background: white;
+        border-radius: 4px;
+      }
+
+      .entity-text-input {
+        width: 100%;
+        min-height: 40px;
+        padding: 5px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 12px;
+        resize: vertical;
+        font-family: inherit;
+        margin-left: 15px;
+        width: calc(100% - 15px);
+      }
+
+      .entity-text-input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .entity-coords {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 10px;
+        margin-left: 15px;
+      }
+
+      .coord-input-group {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .coord-label {
+        font-size: 11px;
+        color: #6c757d;
+        min-width: 20px;
+      }
+
+      .coord-input {
+        flex: 1;
+        padding: 4px 8px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 12px;
+        width: 60px;
+      }
+
+      .coord-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+      }
+
+      .entity-delete-btn {
+        position: absolute;
+        top: 2px;
+        right: 6px;
+        background: none;
+        border: none;
+        color: #e74c3c;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 1;
+        padding: 0;
+      }
+
+      .entity-delete-btn:hover {
+        color: #c0392b;
+        transform: scale(1.1);
+      }
+
+      .action-buttons {
+        padding: 15px;
+        border-top: 2px solid #e9ecef;
+        display: flex;
+        gap: 10px;
+      }
+
+      .action-buttons button {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 14px;
+      }
+
+      .save-btn {
+        background: #27ae60;
+        color: white;
+      }
+
+      .save-btn:hover {
+        background: #229954;
+        transform: translateY(-2px);
+      }
+
+      .export-btn {
+        background: #3498db;
+        color: white;
+      }
+
+      .export-btn:hover {
+        background: #2980b9;
+        transform: translateY(-2px);
+      }
+
+      .empty-state {
+        text-align: center;
+        color: #adb5bd;
+        padding: 40px;
+      }
+
+      .empty-state svg {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 20px;
+        opacity: 0.5;
+      }
+
+      .mode-switch {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 5px;
+        background: white;
+        border-radius: 8px;
+      }
+
+      .mode-switch button {
+        padding: 8px 16px;
+        border: 2px solid #dee2e6;
+        background: white;
+        color: #6c757d;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 500;
+      }
+
+      .mode-switch button.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+      }
+
+      .add-entity-btn {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+      }
+
+      .add-entity-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+      }
+
+      @media (max-width: 1200px) {
+        .main-content {
+          flex-direction: column;
+        }
+
+        .sidebar {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>📄 PDF 标注修改系统</h1>
+        <p>上传 PDF和JSON文件，查看、修改、添加和删除识别标注</p>
+      </div>
+
+      <div class="controls">
+        <div class="upload-section">
+          <div class="file-input-wrapper">
+            <input type="file" id="pdf-upload" accept=".pdf" />
+            <label for="pdf-upload" class="file-input-label">
+              📤 上传 PDF文件
+            </label>
+          </div>
+
+          <div class="file-input-wrapper">
+            <button
+              onclick="openFile()"
+              class="file-input-label json-upload-label"
+            >
+              📋 打开JSON数据
+            </button>
+          </div>
+
+          <div class="mode-switch">
+            <button id="edit-mode" class="active">编辑模式</button>
+            <button id="view-mode">查看模式</button>
+          </div>
+
+          <div class="tool-buttons">
+            <button id="add-box-btn" class="tool-btn">➕ 添加标注框</button>
+            <button id="delete-selected-btn" class="tool-btn delete-btn">
+              🗑️ 删除选中
+            </button>
+          </div>
+
+          <div class="scale-controls">
+            <button id="scale-actual" class="active">1:1</button>
+            <button id="scale-fit">适应窗口</button>
+            <button id="scale-150">150%</button>
+            <button id="scale-200">200%</button>
+            <div class="scale-info" id="scale-info">比例: 100%</div>
+          </div>
+        </div>
+
+        <div class="page-controls" style="display: none" id="page-controls">
+          <button id="prev-page">上一页</button>
+          <span class="page-info">
+            第 <span id="current-page">1</span> /
+            <span id="total-pages">1</span> 页
+          </span>
+          <button id="next-page">下一页</button>
+        </div>
+      </div>
+
+      <div class="main-content">
+        <div class="pdf-container" id="pdf-container">
+          <div
+            id="canvas-container"
+            class="canvas-wrapper"
+            style="display: none"
+          >
+            <canvas id="pdf-canvas"></canvas>
+          </div>
+          <div class="empty-state" id="empty-state">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <p>请上传 PDF文件和JSON数据开始编辑</p>
+          </div>
+        </div>
+
+        <div class="sidebar">
+          <div class="sidebar-header">
+            <h3>📋 识别实体列表</h3>
+            <span class="entity-count" id="entity-count">0 个实体</span>
+          </div>
+          <div id="json-content" class="json-content">
+            <div class="empty-state">
+              <p>请上传 JSON数据文件或添加新标注</p>
+              <button class="add-entity-btn" onclick="addNewEntity()">
+                ➕ 创建第一个标注
+              </button>
+            </div>
+          </div>
+          <div class="action-buttons">
+            <button class="save-btn" onclick="saveChanges()">
+              💾 保存修改
+            </button>
+            <button class="export-btn" onclick="exportJSON()">
+              📥 导出JSON
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 设置 PDF.js worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      let fileName = null;
+      let pdfDoc = null;
+      let pageNum = 1;
+      let pageRendering = false;
+      let pageNumPending = null;
+      let scale = 1.0;
+      let currentPage = null;
+      let canvas = document.getElementById("pdf-canvas");
+      let ctx = canvas.getContext("2d");
+      let fileHandle = null;
+      let jsonData = null;
+      let selectedEntity = null;
+      let selectedBox = null;
+      let isEditMode = true;
+      let isDragging = false;
+      let isResizing = false;
+      let isAddMode = false;
+      let isDrawing = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let resizeHandle = null;
+      let drawingBox = null;
+      let drawStartX = 0;
+      let drawStartY = 0;
+      let lastHandle = null;
+
+      // 拖拽排序相关变量
+      let draggedElement = null;
+      let draggedIndex = null;
+      let placeholderElement = null;
+
+      // 实体类型列表
+      const entityTypes = [
+        "title",
+        "text",
+        "footnote",
+        "chart_caption",
+        "chart",
+        "chart_footnote",
+        "table_caption",
+        "table",
+        "table_footnote",
+        "page_footnote",
+        "figure_caption",
+        "figure",
+        "figure_footnote",
+      ];
+
+      // 计算1:1显示的缩放比例
+      function calculateActualScale() {
+        const screenDPI = 96;
+        const pdfDPI = 72;
+        return screenDPI / pdfDPI;
+      }
+
+      // 初始化空数据
+      function initializeEmptyData() {
+        if (!jsonData) {
+          jsonData = {
+            layout_dets: [],
+          };
+        }
+      }
+
+      // 添加新实体
+      function addNewEntity(x1 = 100, y1 = 100, x2 = 200, y2 = 150) {
+        initializeEmptyData();
+
+        const newEntity = {
+          category_type: "text",
+          poly: [x1 / scale, y1 / scale, x2 / scale, y2 / scale],
+          text: "新建标注",
+          order: jsonData.layout_dets.length,
+        };
+
+        jsonData.layout_dets.push(newEntity);
+        displayJSONData();
+        drawAnnotations();
+        selectEntity(jsonData.layout_dets.length - 1);
+        updateEntityCount();
+      }
+
+      // 删除实体
+      function deleteEntity(index, skipConfirm = false) {
+        if (!jsonData || !jsonData.layout_dets) return;
+
+        const confirmDelete =
+          skipConfirm || confirm(`确定要删除第 ${index + 1} 个标注吗？\n\n`);
+
+        if (confirmDelete) {
+          jsonData.layout_dets.splice(index, 1);
+
+          // 重新排序
+          jsonData.layout_dets.forEach((entity, i) => {
+            entity.order = i;
+          });
+
+          selectedEntity = null;
+          selectedBox = null;
+
+          displayJSONData();
+          drawAnnotations();
+          updateEntityCount();
+
+          // 显示删除成功的临时提示
+          showToast(`已删除标注 #${index + 1}`);
+        }
+      }
+
+      // 删除选中的实体
+      function deleteSelectedEntity() {
+        if (selectedEntity !== null) {
+          // 使用Delete键时不需要确认
+          deleteEntity(selectedEntity, true);
+        } else {
+          showToast("请先选择要删除的标注");
+        }
+      }
+
+      // 显示临时提示
+      function showToast(message) {
+        // 检查是否已存在toast
+        let toast = document.getElementById("toast-notification");
+        if (!toast) {
+          toast = document.createElement("div");
+          toast.id = "toast-notification";
+          toast.style.cssText = `
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 10000;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+          `;
+          document.body.appendChild(toast);
+        }
+
+        toast.textContent = message;
+        toast.style.opacity = "1";
+
+        setTimeout(() => {
+          toast.style.opacity = "0";
+        }, 2000);
+      }
+
+      // 更新实体计数
+      function updateEntityCount() {
+        const count =
+          jsonData && jsonData.layout_dets ? jsonData.layout_dets.length : 0;
+        document.getElementById("entity-count").textContent = `${count} 个实体`;
+      }
+
+      // 初始化拖拽排序
+      function initDragSort() {
+        const container = document.getElementById("json-content");
+
+        container.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          const draggingItem = document.querySelector(".dragging");
+          const afterElement = getDragAfterElement(container, e.clientY);
+
+          if (afterElement == null) {
+            container.appendChild(draggingItem);
+          } else {
+            container.insertBefore(draggingItem, afterElement);
+          }
+        });
+      }
+
+      // 获取拖拽后的元素位置
+      function getDragAfterElement(container, y) {
+        const draggableElements = [
+          ...container.querySelectorAll(".entity-item:not(.dragging)"),
+        ];
+
+        return draggableElements.reduce(
+          (closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+
+            if (offset < 0 && offset > closest.offset) {
+              return { offset: offset, element: child };
+            } else {
+              return closest;
+            }
+          },
+          { offset: Number.NEGATIVE_INFINITY }
+        ).element;
+      }
+
+      // 处理拖拽开始
+      function handleDragStart(e, index) {
+        draggedElement = e.currentTarget;
+        draggedIndex = index;
+        draggedElement.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/html", draggedElement.innerHTML);
+      }
+
+      // 处理拖拽结束
+      function handleDragEnd(e) {
+        e.currentTarget.classList.remove("dragging");
+
+        // 获取新的顺序
+        const allItems = [...document.querySelectorAll(".entity-item")];
+        const newOrder = allItems.map((item) => parseInt(item.dataset.index));
+
+        // 重新排序jsonData
+        const reorderedData = newOrder.map(
+          (oldIndex) => jsonData.layout_dets[oldIndex]
+        );
+        jsonData.layout_dets = reorderedData;
+
+        // 更新order属性
+        jsonData.layout_dets.forEach((entity, i) => {
+          entity.order = i;
+        });
+
+        // 重新渲染
+        displayJSONData();
+        drawAnnotations();
+      }
+
+      // 添加框模式
+      document
+        .getElementById("add-box-btn")
+        .addEventListener("click", function () {
+          if (!pdfDoc) {
+            alert("请先上传 PDF文件");
+            return;
+          }
+
+          isAddMode = !isAddMode;
+          const pdfContainer = document.getElementById("pdf-container");
+
+          if (isAddMode) {
+            this.classList.add("add-mode");
+            this.textContent = "✓ 点击PDF开始绘制";
+            pdfContainer.classList.add("add-mode");
+          } else {
+            this.classList.remove("add-mode");
+            this.textContent = "➕ 添加标注框";
+            pdfContainer.classList.remove("add-mode");
+          }
+        });
+
+      // 删除按钮
+      document
+        .getElementById("delete-selected-btn")
+        .addEventListener("click", deleteSelectedEntity);
+
+      // 处理画布点击（添加新框）
+      document
+        .getElementById("canvas-container")
+        .addEventListener("mousedown", function (e) {
+          if (!isAddMode || !isEditMode) return;
+          if (
+            e.target.classList.contains("annotation-box") ||
+            e.target.classList.contains("resize-handle")
+          )
+            return;
+
+          const rect = canvas.getBoundingClientRect();
+          drawStartX = e.clientX - rect.left;
+          drawStartY = e.clientY - rect.top;
+
+          isDrawing = true;
+
+          // 创建临时绘制框
+          drawingBox = document.createElement("div");
+          drawingBox.className = "drawing-box";
+          drawingBox.style.left = drawStartX + "px";
+          drawingBox.style.top = drawStartY + "px";
+          drawingBox.style.width = "0px";
+          drawingBox.style.height = "0px";
+          this.appendChild(drawingBox);
+
+          e.preventDefault();
+        });
+
+      document.addEventListener("mousemove", function (e) {
+        if (!isDrawing || !drawingBox) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+
+        const width = currentX - drawStartX;
+        const height = currentY - drawStartY;
+
+        if (width < 0) {
+          drawingBox.style.left = currentX + "px";
+          drawingBox.style.width = Math.abs(width) + "px";
+        } else {
+          drawingBox.style.width = width + "px";
+        }
+
+        if (height < 0) {
+          drawingBox.style.top = currentY + "px";
+          drawingBox.style.height = Math.abs(height) + "px";
+        } else {
+          drawingBox.style.height = height + "px";
+        }
+      });
+
+      document.addEventListener("mouseup", function (e) {
+        if (!isDrawing || !drawingBox) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const endX = e.clientX - rect.left;
+        const endY = e.clientY - rect.top;
+
+        const x1 = Math.min(drawStartX, endX);
+        const y1 = Math.min(drawStartY, endY);
+        const x2 = Math.max(drawStartX, endX);
+        const y2 = Math.max(drawStartY, endY);
+
+        // 最小尺寸检查
+        if (Math.abs(x2 - x1) > 10 && Math.abs(y2 - y1) > 10) {
+          addNewEntity(x1, y1, x2, y2);
+        }
+
+        // 清理
+        if (drawingBox) {
+          drawingBox.remove();
+          drawingBox = null;
+        }
+
+        isDrawing = false;
+        isAddMode = false;
+
+        const addBtn = document.getElementById("add-box-btn");
+        addBtn.classList.remove("add-mode");
+        addBtn.textContent = "➕ 添加标注框";
+        document.getElementById("pdf-container").classList.remove("add-mode");
+      });
+
+      // 缩放控制
+      document
+        .getElementById("scale-actual")
+        .addEventListener("click", function () {
+          scale = calculateActualScale();
+          updateScaleButtons(this);
+          updateScaleInfo();
+          if (currentPage) {
+            renderPage(pageNum);
+          }
+        });
+
+      document
+        .getElementById("scale-fit")
+        .addEventListener("click", function () {
+          if (currentPage) {
+            const containerWidth =
+              document.querySelector(".pdf-container").clientWidth - 40;
+            const viewport = currentPage.getViewport({ scale: 1.0 });
+            scale = containerWidth / viewport.width;
+            updateScaleButtons(this);
+            updateScaleInfo();
+            renderPage(pageNum);
+          }
+        });
+
+      document
+        .getElementById("scale-150")
+        .addEventListener("click", function () {
+          scale = 1.5;
+          updateScaleButtons(this);
+          updateScaleInfo();
+          if (currentPage) {
+            renderPage(pageNum);
+          }
+        });
+
+      document
+        .getElementById("scale-200")
+        .addEventListener("click", function () {
+          scale = 2.0;
+          updateScaleButtons(this);
+          updateScaleInfo();
+          if (currentPage) {
+            renderPage(pageNum);
+          }
+        });
+
+      function updateScaleButtons(activeButton) {
+        document.querySelectorAll(".scale-controls button").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        activeButton.classList.add("active");
+      }
+
+      function updateScaleInfo() {
+        const percentage = Math.round((scale / calculateActualScale()) * 100);
+        document.getElementById(
+          "scale-info"
+        ).textContent = `比例: ${percentage}%`;
+      }
+
+      // 模式切换
+      document
+        .getElementById("edit-mode")
+        .addEventListener("click", function () {
+          isEditMode = true;
+          this.classList.add("active");
+          document.getElementById("view-mode").classList.remove("active");
+          updateAnnotationBoxes();
+        });
+
+      document
+        .getElementById("view-mode")
+        .addEventListener("click", function () {
+          isEditMode = false;
+          this.classList.add("active");
+          document.getElementById("edit-mode").classList.remove("active");
+          updateAnnotationBoxes();
+        });
+
+      // PDF上传处理
+      document
+        .getElementById("pdf-upload")
+        .addEventListener("change", function (e) {
+          const file = e.target.files[0];
+          if (file && file.type === "application/pdf") {
+            const fileReader = new FileReader();
+
+            fileReader.onload = function () {
+              const typedarray = new Uint8Array(this.result);
+              loadPDF(typedarray);
+            };
+            fileReader.readAsArrayBuffer(file);
+          }
+        });
+
+      // 加载PDF
+      function loadPDF(data) {
+        pdfjsLib.getDocument(data).promise.then(function (pdf) {
+          pdfDoc = pdf;
+          document.getElementById("total-pages").textContent = pdf.numPages;
+          document.getElementById("page-controls").style.display = "flex";
+          document.getElementById("canvas-container").style.display = "block";
+          document.getElementById("empty-state").style.display = "none";
+
+          scale = calculateActualScale();
+          updateScaleInfo();
+
+          renderPage(pageNum);
+        });
+      }
+
+      // 渲染页面
+      function renderPage(num) {
+        pageRendering = true;
+
+        pdfDoc.getPage(num).then(function (page) {
+          currentPage = page;
+          const viewport = page.getViewport({ scale: scale });
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport,
+          };
+
+          const renderTask = page.render(renderContext);
+
+          renderTask.promise.then(function () {
+            pageRendering = false;
+            if (pageNumPending !== null) {
+              renderPage(pageNumPending);
+              pageNumPending = null;
+            }
+
+            if (jsonData) {
+              drawAnnotations();
+            }
+          });
+        });
+
+        document.getElementById("current-page").textContent = num;
+        updatePageButtons();
+      }
+
+      // 显示JSON数据
+      function displayJSONData() {
+        const container = document.getElementById("json-content");
+        container.innerHTML = "";
+
+        if (
+          !jsonData ||
+          !jsonData.layout_dets ||
+          jsonData.layout_dets.length === 0
+        ) {
+          container.innerHTML = `
+                    <div class="empty-state">
+                        <p>没有识别数据</p>
+                        ${
+                          pdfDoc
+                            ? '<button class="add-entity-btn" onclick="addNewEntity()">➕ 创建第一个标注</button>'
+                            : ""
+                        }
+                    </div>
+                `;
+          return;
+        }
+
+        jsonData.layout_dets.forEach((entity, index) => {
+          const entityDiv = document.createElement("div");
+          entityDiv.className = "entity-item";
+          entityDiv.dataset.index = index;
+          entityDiv.draggable = true;
+
+          const text = entity.text
+            ? entity.text.length > 100
+              ? entity.text.substring(0, 100) + "..."
+              : entity.text
+            : entity.html
+            ? "[表格内容]"
+            : "无文本";
+
+          entityDiv.innerHTML = `
+                    <div class="drag-handle" title="拖动排序"></div>
+                    <button class="entity-delete-btn" onclick="deleteEntity(${index})" title="删除此标注">×</button>
+                    <div class="entity-header">
+                        <select class="entity-type-select" id="type-${index}" data-index="${index}">
+                            ${entityTypes
+                              .map(
+                                (type) =>
+                                  `<option value="${type}" ${
+                                    entity.category_type === type
+                                      ? "selected"
+                                      : ""
+                                  }>${type}</option>`
+                              )
+                              .join("")}
+                        </select>
+                        <span class="entity-order">序号: ${
+                          entity.order !== undefined ? entity.order : index
+                        }</span>
+                    </div>
+                    <textarea class="entity-text-input" id="text-${index}" data-index="${index}" placeholder="输入标注内容...">${
+            entity.text || entity.html || ""
+          }</textarea>
+                    <div class="entity-coords">
+                        <div class="coord-input-group">
+                            <span class="coord-label">X1:</span>
+                            <input type="number" class="coord-input" id="x1-${index}" value="${Math.round(
+            entity.poly[0] * scale
+          )}" data-index="${index}" data-coord="0">
+                        </div>
+                        <div class="coord-input-group">
+                            <span class="coord-label">Y1:</span>
+                            <input type="number" class="coord-input" id="y1-${index}" value="${Math.round(
+            entity.poly[1] * scale
+          )}" data-index="${index}" data-coord="1">
+                        </div>
+                        <div class="coord-input-group">
+                            <span class="coord-label">X2:</span>
+                            <input type="number" class="coord-input" id="x2-${index}" value="${Math.round(
+            entity.poly[2] * scale
+          )}" data-index="${index}" data-coord="2">
+                        </div>
+                        <div class="coord-input-group">
+                            <span class="coord-label">Y2:</span>
+                            <input type="number" class="coord-input" id="y2-${index}" value="${Math.round(
+            entity.poly[3] * scale
+          )}" data-index="${index}" data-coord="3">
+                        </div>
+                    </div>
+                `;
+
+          // 添加拖拽事件监听
+          entityDiv.addEventListener("dragstart", (e) =>
+            handleDragStart(e, index)
+          );
+          entityDiv.addEventListener("dragend", handleDragEnd);
+          entityDiv.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            entityDiv.classList.add("drag-over");
+          });
+          entityDiv.addEventListener("dragleave", () => {
+            entityDiv.classList.remove("drag-over");
+          });
+          entityDiv.addEventListener("drop", (e) => {
+            e.preventDefault();
+            entityDiv.classList.remove("drag-over");
+          });
+
+          // 点击选择实体（排除拖拽手柄）
+          entityDiv.addEventListener("click", function (e) {
+            if (
+              e.target.classList.contains("coord-input") ||
+              e.target.classList.contains("entity-text-input") ||
+              e.target.classList.contains("entity-type-select") ||
+              e.target.classList.contains("entity-delete-btn") ||
+              e.target.classList.contains("drag-handle")
+            )
+              return;
+            selectEntity(index);
+          });
+
+          container.appendChild(entityDiv);
+        });
+
+        // 绑定类型选择事件
+        document.querySelectorAll(".entity-type-select").forEach((select) => {
+          select.addEventListener("change", function () {
+            const index = parseInt(this.dataset.index);
+            if (jsonData && jsonData.layout_dets[index]) {
+              jsonData.layout_dets[index].category_type = this.value;
+              drawAnnotations();
+            }
+          });
+        });
+
+        // 绑定文本输入事件
+        document.querySelectorAll(".entity-text-input").forEach((input) => {
+          input.addEventListener("input", function () {
+            const index = parseInt(this.dataset.index);
+            if (jsonData && jsonData.layout_dets[index]) {
+              jsonData.layout_dets[index].text = this.value;
+            }
+          });
+        });
+
+        // 绑定坐标输入事件
+        document.querySelectorAll(".coord-input").forEach((input) => {
+          input.addEventListener("input", function () {
+            const index = parseInt(this.dataset.index);
+            const coordIndex = parseInt(this.dataset.coord);
+            const value = parseInt(this.value) || 0;
+
+            if (jsonData && jsonData.layout_dets[index]) {
+              jsonData.layout_dets[index].poly[coordIndex] = value / scale;
+              drawAnnotations();
+            }
+          });
+        });
+      }
+
+      // 选择实体
+      function selectEntity(index) {
+        selectedEntity = index;
+
+        document.querySelectorAll(".entity-item").forEach((item, i) => {
+          if (i === index) {
+            item.classList.add("selected");
+          } else {
+            item.classList.remove("selected");
+          }
+        });
+
+        document.querySelectorAll(".annotation-box").forEach((box, i) => {
+          if (i === index) {
+            box.classList.add("selected");
+            selectedBox = box;
+          } else {
+            box.classList.remove("selected");
+          }
+        });
+      }
+
+      // 绘制标注
+      function drawAnnotations() {
+        if (!jsonData || !jsonData.layout_dets) return;
+
+        const existingBoxes = document.querySelectorAll(".annotation-box");
+        existingBoxes.forEach((box) => box.remove());
+
+        const canvasContainer = document.getElementById("canvas-container");
+
+        jsonData.layout_dets.forEach((entity, index) => {
+          if (entity.poly && entity.poly.length >= 4) {
+            const box = document.createElement("div");
+            box.className = "annotation-box";
+            box.dataset.index = index;
+
+            const x1 = entity.poly[0] * scale;
+            const y1 = entity.poly[1] * scale;
+            const x2 = entity.poly[2] * scale;
+            const y2 = entity.poly[3] * scale;
+
+            box.style.left = x1 + "px";
+            box.style.top = y1 + "px";
+            box.style.width = x2 - x1 + "px";
+            box.style.height = y2 - y1 + "px";
+
+            const label = document.createElement("div");
+            label.className = "annotation-label";
+            label.textContent = `${entity.category_type} #${
+              entity.order !== undefined ? entity.order : index
+            }`;
+            box.appendChild(label);
+
+            // 添加删除按钮
+            const deleteBtn = document.createElement("div");
+            deleteBtn.className = "delete-handle";
+            deleteBtn.innerHTML = "×";
+            deleteBtn.onclick = function (e) {
+              e.stopPropagation();
+              deleteEntity(index);
+            };
+            box.appendChild(deleteBtn);
+
+            if (isEditMode) {
+              ["nw", "ne", "sw", "se"].forEach((pos) => {
+                const handle = document.createElement("div");
+                handle.className = `resize-handle ${pos}`;
+                handle.dataset.position = pos;
+                box.appendChild(handle);
+              });
+            }
+
+            box.addEventListener("click", function (e) {
+              e.stopPropagation();
+              selectEntity(index);
+            });
+
+            if (isEditMode) {
+              box.addEventListener("mousedown", startDrag);
+            }
+
+            canvasContainer.appendChild(box);
+
+            if (selectedEntity === index) {
+              box.classList.add("selected");
+              selectedBox = box;
+            }
+          }
+        });
+      }
+
+      // 拖拽功能
+      function startDrag(e) {
+        if (!isEditMode || isAddMode) return;
+        if (e.target.classList.contains("delete-handle")) return;
+
+        const box = e.currentTarget;
+        const index = parseInt(box.dataset.index);
+
+        selectEntity(index);
+
+        if (e.target.classList.contains("resize-handle")) {
+          isResizing = true;
+          resizeHandle = e.target.dataset.position;
+        } else {
+          isDragging = true;
+        }
+
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+
+        document.addEventListener("mousemove", handleDrag);
+        document.addEventListener("mouseup", stopDrag);
+        e.preventDefault();
+      }
+
+      function handleDrag(e) {
+        if (!selectedBox || selectedEntity === null) return;
+
+        const deltaX = e.clientX - dragStartX;
+        const deltaY = e.clientY - dragStartY;
+
+        const entity = jsonData.layout_dets[selectedEntity];
+
+        const scaledDeltaX = deltaX / scale;
+        const scaledDeltaY = deltaY / scale;
+
+        if (isDragging) {
+          const newX1 = entity.poly[0] + scaledDeltaX;
+          const newY1 = entity.poly[1] + scaledDeltaY;
+          const width = entity.poly[2] - entity.poly[0];
+          const height = entity.poly[3] - entity.poly[1];
+
+          entity.poly[0] = Math.max(0, newX1);
+          entity.poly[1] = Math.max(0, newY1);
+          entity.poly[2] = entity.poly[0] + width;
+          entity.poly[3] = entity.poly[1] + height;
+        } else if (isResizing) {
+          const minSize = 10 / scale;
+          switch (resizeHandle) {
+            case "nw":
+              entity.poly[0] = Math.min(
+                entity.poly[2] - minSize,
+                entity.poly[0] + scaledDeltaX
+              );
+              entity.poly[1] = Math.min(
+                entity.poly[3] - minSize,
+                entity.poly[1] + scaledDeltaY
+              );
+              break;
+            case "ne":
+              entity.poly[2] = Math.max(
+                entity.poly[0] + minSize,
+                entity.poly[2] + scaledDeltaX
+              );
+              entity.poly[1] = Math.min(
+                entity.poly[3] - minSize,
+                entity.poly[1] + scaledDeltaY
+              );
+              break;
+            case "sw":
+              entity.poly[0] = Math.min(
+                entity.poly[2] - minSize,
+                entity.poly[0] + scaledDeltaX
+              );
+              entity.poly[3] = Math.max(
+                entity.poly[1] + minSize,
+                entity.poly[3] + scaledDeltaY
+              );
+              break;
+            case "se":
+              entity.poly[2] = Math.max(
+                entity.poly[0] + minSize,
+                entity.poly[2] + scaledDeltaX
+              );
+              entity.poly[3] = Math.max(
+                entity.poly[1] + minSize,
+                entity.poly[3] + scaledDeltaY
+              );
+              break;
+          }
+        }
+
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+
+        updateSelectedBox();
+        updateCoordinateInputs();
+      }
+
+      function stopDrag() {
+        isDragging = false;
+        isResizing = false;
+        resizeHandle = null;
+        document.removeEventListener("mousemove", handleDrag);
+        document.removeEventListener("mouseup", stopDrag);
+      }
+
+      function updateSelectedBox() {
+        if (!selectedBox || selectedEntity === null) return;
+
+        const entity = jsonData.layout_dets[selectedEntity];
+        selectedBox.style.left = entity.poly[0] * scale + "px";
+        selectedBox.style.top = entity.poly[1] * scale + "px";
+        selectedBox.style.width =
+          (entity.poly[2] - entity.poly[0]) * scale + "px";
+        selectedBox.style.height =
+          (entity.poly[3] - entity.poly[1]) * scale + "px";
+      }
+
+      function updateCoordinateInputs() {
+        if (selectedEntity === null) return;
+
+        const entity = jsonData.layout_dets[selectedEntity];
+        document.getElementById(`x1-${selectedEntity}`).value = Math.round(
+          entity.poly[0] * scale
+        );
+        document.getElementById(`y1-${selectedEntity}`).value = Math.round(
+          entity.poly[1] * scale
+        );
+        document.getElementById(`x2-${selectedEntity}`).value = Math.round(
+          entity.poly[2] * scale
+        );
+        document.getElementById(`y2-${selectedEntity}`).value = Math.round(
+          entity.poly[3] * scale
+        );
+      }
+
+      function updateAnnotationBoxes() {
+        if (jsonData) {
+          drawAnnotations();
+        }
+      }
+
+      // 保存修改
+      // async function openFile() {
+      //   try {
+      //     [fileHandle] = await window.showOpenFilePicker({
+      //       types: [
+      //         {
+      //           description: "JSON 文件",
+      //           accept: { "application/json": [".json"] },
+      //         },
+      //       ],
+      //     });
+
+      //     const file = await fileHandle.getFile();
+      //     fileName = file.name;
+      //     const text = await file.text();
+      //     jsonData = JSON.parse(text);
+
+      //     displayJSONData();
+      //     updateEntityCount();
+      //     if (pdfDoc) {
+      //       drawAnnotations();
+      //     }
+      //   } catch (err) {
+      //     console.error("打开文件失败：", err);
+      //   }
+      // }
+      async function openFile() {
+        try {
+          const pickerOptions = {
+            types: [
+              {
+                description: "JSON 文件",
+                accept: { "application/json": [".json"] },
+              },
+            ],
+            startIn: lastHandle || "documents", // 用上次的句柄
+          };
+
+          [fileHandle] = await window.showOpenFilePicker(pickerOptions);
+
+          // 保存本次的句柄（这里保存文件句柄就行）
+          lastHandle = fileHandle;
+
+          const file = await fileHandle.getFile();
+          fileName = file.name;
+          const text = await file.text();
+          jsonData = JSON.parse(text);
+
+          displayJSONData();
+          updateEntityCount();
+          if (pdfDoc) drawAnnotations();
+        } catch (err) {
+          console.error("打开文件失败：", err);
+        }
+      }
+      async function saveChanges() {
+        if (!jsonData) {
+          alert("没有数据可保存");
+          return;
+        }
+        try {
+          const writable = await fileHandle.createWritable();
+          jsonData.layout_dets.forEach((entity) => {
+            if (Array.isArray(entity.poly)) {
+              entity.poly = entity.poly.map((coord) => Math.floor(coord));
+            }
+          });
+          await writable.write(JSON.stringify(jsonData, null, 2));
+          await writable.close();
+          alert("修改已保存并覆盖原文件！");
+        } catch (err) {
+          console.error("保存失败：", err);
+        }
+      }
+
+      // 导出JSON
+      function exportJSON() {
+        if (
+          !jsonData ||
+          !jsonData.layout_dets ||
+          jsonData.layout_dets.length === 0
+        ) {
+          alert("没有数据可导出");
+          return;
+        }
+        jsonData.layout_dets.forEach((entity) => {
+          if (Array.isArray(entity.poly)) {
+            entity.poly = entity.poly.map((coord) => Math.floor(coord));
+          }
+        });
+        const dataStr = JSON.stringify(jsonData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${fileName || "modified-layout"}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      // 页面导航
+      document
+        .getElementById("prev-page")
+        .addEventListener("click", function () {
+          if (pageNum <= 1) return;
+          pageNum--;
+          queueRenderPage(pageNum);
+        });
+
+      document
+        .getElementById("next-page")
+        .addEventListener("click", function () {
+          if (pageNum >= pdfDoc.numPages) return;
+          pageNum++;
+          queueRenderPage(pageNum);
+        });
+
+      function queueRenderPage(num) {
+        if (pageRendering) {
+          pageNumPending = num;
+        } else {
+          renderPage(num);
+        }
+      }
+
+      function updatePageButtons() {
+        document.getElementById("prev-page").disabled = pageNum <= 1;
+        document.getElementById("next-page").disabled =
+          pageNum >= pdfDoc.numPages;
+      }
+
+      // 键盘快捷键
+      document.addEventListener("keydown", function (e) {
+        // Delete键删除选中的标注
+        if (e.key === "Delete" || e.key === "Backspace") {
+          // 防止在输入框中按Delete/Backspace时触发删除
+          const activeElement = document.activeElement;
+          const isInputField =
+            activeElement.tagName === "INPUT" ||
+            activeElement.tagName === "TEXTAREA" ||
+            activeElement.tagName === "SELECT";
+
+          if (!isInputField && selectedEntity !== null) {
+            e.preventDefault(); // 防止Backspace导致页面后退
+            deleteSelectedEntity();
+          }
+        }
+
+        // Ctrl+A 全选所有标注（可选功能）
+        if (e.ctrlKey && e.key === "a" && !e.shiftKey) {
+          const activeElement = document.activeElement;
+          const isInputField =
+            activeElement.tagName === "INPUT" ||
+            activeElement.tagName === "TEXTAREA";
+
+          if (!isInputField) {
+            e.preventDefault();
+            // 这里可以添加全选逻辑
+          }
+        }
+
+        // Escape键取消选择
+        if (e.key === "Escape") {
+          selectedEntity = null;
+          selectedBox = null;
+          document.querySelectorAll(".entity-item").forEach((item) => {
+            item.classList.remove("selected");
+          });
+          document.querySelectorAll(".annotation-box").forEach((box) => {
+            box.classList.remove("selected");
+          });
+        }
+      });
+
+      // 初始化拖拽排序
+      initDragSort();
+    </script>
+  </body>
+</html>
