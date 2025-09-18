@@ -577,7 +577,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // ===== 元素操作 =====
 
   /**
-   * 更新元素 - 增强错误处理和类型检查版本
+   * 更新元素 - 增强错误处理和类型检查版本，修复order属性更新bug
    */
   async function updateElement(index: number, updates: Partial<LayoutElement>) {
     if (!currentSample.value || index < 0 || index >= currentSample.value.layout_dets.length) {
@@ -606,6 +606,11 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       // 更新元素
       currentSample.value.layout_dets[index] = newElement
       modifiedSamples.value.add(currentIndex.value)
+
+      // 如果更新了order属性，触发重新排序以确保order值唯一且连续
+      if ('order' in updates) {
+        await reorderElements()
+      }
 
       // 自动保存数据
       await saveToLocalStorage()
