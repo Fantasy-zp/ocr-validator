@@ -725,7 +725,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   }
 
   /**
-   * 添加元素 - 增强错误处理和类型检查版本
+   * 添加元素 - 支持按指定order值插入的改进版本
    */
   async function addElement(element: LayoutElement) {
     if (!currentSample.value) return false
@@ -742,12 +742,62 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         element.poly = [0, 0, 100, 100] // 设置默认值
       }
 
-      // 计算新元素的order
-      const maxOrder = Math.max(
-        0,
-        ...currentSample.value.layout_dets.map(e => e.order || 0)
-      )
-      const newElement = { ...element, order: maxOrder + 1 }
+      // 深拷贝以避免修改传入的元素
+      const newElement = { ...element }
+      
+      // 创建当前元素列表的副本并确保所有元素都有order值
+      const elementsCopy = DataUtils.deepClone(currentSample.value.layout_dets)
+      elementsCopy.forEach((elem, idx) => {
+        if (elem.order === undefined) {
+          elem.order = idx
+        }
+      })
+
+      // 检查是否提供了有效的order值
+      if (element.order !== undefined && typeof element.order === 'number' && element.order >= 0) {
+        // 使用用户指定的order值，但确保在有效范围内
+        const targetOrder = Math.min(
+          Math.max(0, Math.floor(element.order)),
+          elementsCopy.length
+        )
+        newElement.order = targetOrder
+        
+        // 找到插入位置
+        const insertIndex = elementsCopy.findIndex(elem => elem.order >= targetOrder)
+        
+        // 调整其他元素的order值
+        elementsCopy.forEach(elem => {
+          if (elem.order >= targetOrder) {
+            elem.order += 1
+          }
+        })
+        
+        // 插入新元素
+        if (insertIndex === -1) {
+          elementsCopy.push(newElement)
+        } else {
+          elementsCopy.splice(insertIndex, 0, newElement)
+        }
+        
+        // 重新分配所有元素的order值以确保连续
+        elementsCopy.sort((a, b) => a.order - b.order)
+        elementsCopy.forEach((elem, idx) => {
+          elem.order = idx
+        })
+        
+        // 更新原始数组
+        currentSample.value.layout_dets = elementsCopy
+      } else {
+        // 如果没有有效的order值，使用当前逻辑（添加到末尾）
+        const maxOrder = Math.max(
+          0,
+          ...elementsCopy.map(e => e.order || 0)
+        )
+        newElement.order = maxOrder + 1
+        
+        // 添加元素
+        currentSample.value.layout_dets.push(newElement)
+      }
 
       // 记录编辑历史
       addToHistory({
@@ -756,12 +806,15 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         timestamp: Date.now()
       })
 
-      // 添加元素
-      currentSample.value.layout_dets.push(newElement)
       modifiedSamples.value.add(currentIndex.value)
 
       // 自动保存数据
       await saveToLocalStorage()
+
+      // 强制响应式更新
+      if (currentSample.value.layout_dets.length > 0) {
+        currentSample.value.layout_dets = [...currentSample.value.layout_dets]
+      }
 
       return true
     } catch (error) {

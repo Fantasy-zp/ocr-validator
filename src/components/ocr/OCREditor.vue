@@ -344,7 +344,7 @@ const confirmAddElement = () => {
       newElementForm.x2,
       newElementForm.y2
     ],
-    order: ocrStore.currentElements.length
+    order: newElementForm.order
   }
 
   if (newElementForm.category_type === 'table') {

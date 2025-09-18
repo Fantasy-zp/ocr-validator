@@ -120,7 +120,7 @@
         <!-- 提示信息 -->
         <div class="editor-tips">
           <el-text type="info" size="small">
-            提示：单击选择单元格，双击编辑内容，按住鼠标拖拽选择多个单元格进行合并
+            提示：单击选择单元格，双击或按"F"键编辑内容，按住鼠标拖拽选择多个单元格进行合并
           </el-text>
         </div>
       </div>
@@ -985,6 +985,14 @@ const handleKeyboard = (e: KeyboardEvent) => {
       if (selectedCell.value || selectedRange.value) {
         selectedCell.value = null
         selectedRange.value = null
+        e.preventDefault()
+      }
+      break
+      case 'f':
+      case 'F':
+      // F键编辑单元格
+      if (!editingCell.value && selectedCell.value) {
+        startEdit(row, col)
         e.preventDefault()
       }
       break
