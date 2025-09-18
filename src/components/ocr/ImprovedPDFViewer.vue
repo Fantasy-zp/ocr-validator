@@ -14,16 +14,7 @@
       <el-checkbox v-model="showBoundingBoxes">显示边框</el-checkbox>
       <el-checkbox v-model="showLabels">显示标签</el-checkbox>
 
-      <!-- PDF旋转按钮 -->
-      <el-button-group style="margin-left: 10px;">
-        <el-tooltip content="顺时针旋转90度">
-          <el-button @click="rotatePDFClockwise" :icon="Refresh" size="small" class="rotate-btn-clockwise" />
-        </el-tooltip>
-        <el-tooltip content="逆时针旋转90度">
-          <el-button @click="rotatePDFCounterClockwise" :icon="Refresh" size="small"
-            class="rotate-btn-counterclockwise" />
-        </el-tooltip>
-      </el-button-group>
+
 
       <!-- 拖拽模式按钮 -->
       <el-button :type="props.enableDragging ? 'primary' : ''" size="small" @click="$emit('toggle-dragging')"
@@ -119,8 +110,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { ZoomIn, ZoomOut, Loading, Refresh } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Loading } from '@element-plus/icons-vue'
 import * as pdfjsLib from 'pdfjs-dist'
 import type { LayoutElement } from '@/types'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
@@ -178,9 +168,6 @@ let renderTaskObj: pdfjsLib.RenderTask | null = null
 // 页面尺寸
 const pageWidth = ref(0)
 const pageHeight = ref(0)
-// 原始页面尺寸（不考虑旋转）
-const originalPageWidth = ref(0)
-const originalPageHeight = ref(0)
 
 // 计算样式
 const canvasContainerStyle = computed<CSSProperties>(() => ({
@@ -278,8 +265,8 @@ const handleMouseMove = (event: MouseEvent) => {
     newPoly[1] += dy / scale.value
     newPoly[2] += dx / scale.value
     newPoly[3] += dy / scale.value
-  } else if (!rotationAngle.value) {
-    // 只有在未旋转状态下才允许调整大小，旋转状态下禁用此功能
+  } else {
+    // 允许调整大小
     // 调整边界框大小
     switch (dragType.value) {
       case 'resize-nw':
@@ -355,6 +342,8 @@ const loadPDF = async () => {
     retryTimer = null
   }
 
+
+
   loading.value = true
   error.value = ''
 
@@ -425,7 +414,7 @@ const loadPDF = async () => {
   }
 }
 
-// 渲染页面
+// 渲染页面 - 简化版本
 const renderPage = async () => {
   if (!pageObj || !canvasRef.value) {
     console.log('等待canvas或page...')
@@ -443,60 +432,48 @@ const renderPage = async () => {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // 获取视口
-    const viewport = pageObj.getViewport({
-      scale: scale.value,
-      rotation: rotationAngle.value
-    })
+    // 获取视口 - 让PDF.js自动处理旋转
+    const viewport = pageObj.getViewport({ scale: scale.value })
 
     // 设置canvas尺寸
     canvas.width = viewport.width
     canvas.height = viewport.height
 
-    // 更新页面尺寸（考虑旋转后的实际尺寸）
+    // 更新页面尺寸
     pageWidth.value = viewport.width / scale.value
     pageHeight.value = viewport.height / scale.value
 
-    // 如果是第一次渲染，保存原始页面尺寸
-    if (originalPageWidth.value === 0 && originalPageHeight.value === 0) {
-      originalPageWidth.value = viewport.width / scale.value
-      originalPageHeight.value = viewport.height / scale.value
-    }
+
 
     // 渲染
     const renderContext = {
       canvasContext: ctx,
-      viewport: viewport
+      viewport: viewport,
+      intent: 'display',
+      annotationMode: 0,
+      renderInteractiveForms: false
     }
 
     renderTaskObj = pageObj.render(renderContext)
     await renderTaskObj.promise
     renderTaskObj = null
 
+    console.log('PDF渲染完成:', {
+      width: pageWidth.value,
+      height: pageHeight.value,
+      scale: scale.value
+    })
+
   } catch (err: unknown) {
-    if (err instanceof Error && err.name !== 'RenderingCancelledException') {
+    // 处理非取消渲染的异常
+    if (!(err instanceof Error && err.name === 'RenderingCancelledException')) {
       console.error('渲染失败:', err)
-      error.value = `渲染失败: ${err.message}`
+      error.value = err instanceof Error ? `渲染失败: ${err.message}` : '渲染失败: 未知错误'
     }
   }
 }
 
-// PDF旋转角度 (0, 90, 180, 270)
-const rotationAngle = ref(0)
 
-// 顺时针旋转90度
-const rotatePDFClockwise = () => {
-  rotationAngle.value = (rotationAngle.value + 90) % 360
-  renderPage()
-  ElMessage.success('PDF已顺时针旋转90度')
-}
-
-// 逆时针旋转90度
-const rotatePDFCounterClockwise = () => {
-  rotationAngle.value = (rotationAngle.value - 90 + 360) % 360
-  renderPage()
-  ElMessage.success('PDF已逆时针旋转90度')
-}
 
 // 缩放控制
 const zoomIn = () => {
@@ -537,6 +514,19 @@ watch(() => props.selectedIndex, (index) => {
 // 监听PDF名称变化
 watch(() => props.pdfName, (newName) => {
   if (newName) {
+    // 清除之前的PDF资源
+    if (renderTaskObj) {
+      renderTaskObj.cancel()
+      renderTaskObj = null
+    }
+    if (pdfDoc) {
+      pdfDoc.destroy()
+      pdfDoc = null
+      pageObj = null
+    }
+
+
+
     loadPDF()
   }
 })
@@ -776,12 +766,5 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-// 表格翻转按钮样式
-.flip-btn-horizontal .el-icon {
-  transform: scaleX(1);
-}
 
-.flip-btn-vertical .el-icon {
-  transform: rotate(90deg);
-}
 </style>

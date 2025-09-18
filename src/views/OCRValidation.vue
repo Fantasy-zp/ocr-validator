@@ -218,11 +218,10 @@ console.warn('部分数据解析失败:\n', detailedErrors)
 const clearLocalData = () => {
   ElMessageBox.confirm(
     '确定要清除所有本地数据吗？此操作不可恢复！',
-    '清除确认',
     {
+      title: '清除确认',
       confirmButtonText: '确定清除',
-      cancelButtonText: '取消',
-      type: 'danger'
+      cancelButtonText: '取消'
     }
   ).then(async () => {
     try {
