@@ -357,14 +357,28 @@ const handleKeyboardShortcuts = () => {
     // 处理向上移动快捷键
     const handleMoveUp = () => {
       if (props.selectedIndex !== null && props.selectedIndex > 0) {
-        moveElementUp(props.selectedIndex)
+        const currentIndex = props.selectedIndex
+        moveElementUp(currentIndex)
+        // 移动后更新选中状态（向上移动后，选中的应该是新位置的元素）
+        setTimeout(() => {
+          if (currentIndex !== null && currentIndex > 0) {
+            emit('element-click', currentIndex - 1)
+          }
+        }, 100)
       }
     }
 
     // 处理向下移动快捷键
     const handleMoveDown = () => {
       if (props.selectedIndex !== null && props.selectedIndex < props.elements.length - 1) {
-        moveElementDown(props.selectedIndex)
+        const currentIndex = props.selectedIndex
+        moveElementDown(currentIndex)
+        // 移动后更新选中状态（向下移动后，选中的应该是新位置的元素）
+        setTimeout(() => {
+          if (currentIndex !== null && currentIndex < props.elements.length - 1) {
+            emit('element-click', currentIndex + 1)
+          }
+        }, 100)
       }
     }
 
