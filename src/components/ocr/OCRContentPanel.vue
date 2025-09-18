@@ -31,13 +31,16 @@
       <!-- 普通列表（元素少于100个） -->
       <div v-else class="normal-list">
         <div
-          v-for="(elem, idx) in elements"
-          :key="idx"
-          class="draggable-item"
-          :draggable="true"
-          @dragstart="handleDragStart(idx)"
-          @dragover.prevent="handleDragOver(idx)"
-          @drop="handleDrop(idx)"
+            v-for="(elem, idx) in elements"
+            :key="`elem-${idx}-${elem.order}`"
+            :data-index="idx"
+            class="draggable-item"
+            :draggable="true"
+            @dragstart="handleDragStart(idx)"
+            @dragover.prevent="handleDragOver(idx, $event)"
+            @dragleave="handleDragLeave(idx)"
+            @drop="handleDrop(idx)"
+            @dragend="handleDragEnd()"
         >
           <OCRElementCard
             :element="elem"
@@ -151,11 +154,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElTag, ElButton, ElSwitch, ElSelect, ElOption } from 'element-plus'
 import OCRElementCard from './OCRElementCard.vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
 import type { LayoutElement, PageInfo } from '@/types'
+import { KeyboardManager } from '@/utils/helpers'
 
 const props = defineProps<{
   elements: LayoutElement[]
@@ -182,6 +186,9 @@ const editPageInfoForm = ref<PageInfo>({
   is_diagram: props.pageInfo?.is_diagram || false
 })
 const draggedElementIndex = ref<number | null>(null)
+
+// 键盘管理器实例
+const keyboardManager = new KeyboardManager()
 
 // 虚拟滚动的列定义
 const virtualColumns = computed(() => [
@@ -272,12 +279,36 @@ const sortElementsByOrder = async () => {
 // 拖拽排序相关方法
 const handleDragStart = (index: number) => {
   draggedElementIndex.value = index
+  // 添加拖拽时的视觉效果
+  const element = document.querySelector(`[data-index="${index}"]`)
+  if (element) {
+    element.classList.add('dragging')
+  }
 }
 
-const handleDragOver = (_index: number) => {
+const handleDragOver = (index: number, e: DragEvent) => {
   // 防止默认行为以允许放置
+  e.preventDefault()
+  // 添加hover效果以提供视觉反馈
+  const element = document.querySelector(`[data-index="${index}"]`)
+  if (element && draggedElementIndex.value !== index) {
+    element.classList.add('drag-over')
+  }
+}
 
-  // _index参数用于满足拖拽API要求，但在当前实现中未使用
+const handleDragLeave = (index: number) => {
+  // 移除hover效果
+  const element = document.querySelector(`[data-index="${index}"]`)
+  if (element) {
+    element.classList.remove('drag-over')
+  }
+}
+
+const handleDragEnd = () => {
+  // 拖拽结束时清理所有视觉效果
+  document.querySelectorAll('.dragging, .drag-over').forEach(el => {
+    el.classList.remove('dragging', 'drag-over')
+  })
 }
 
 const handleDrop = async (dropIndex: number) => {
@@ -298,6 +329,10 @@ const handleDrop = async (dropIndex: number) => {
       ElMessage.error('更新元素顺序失败')
     }
   }
+  // 清理视觉效果
+  document.querySelectorAll('.dragging, .drag-over').forEach(el => {
+    el.classList.remove('dragging', 'drag-over')
+  })
   draggedElementIndex.value = null
 }
 
@@ -316,6 +351,42 @@ const moveElementUp = async (index: number) => {
     }
   }
 }
+
+// 键盘快捷键处理函数
+const handleKeyboardShortcuts = () => {
+    // 处理向上移动快捷键
+    const handleMoveUp = () => {
+      if (props.selectedIndex !== null && props.selectedIndex > 0) {
+        moveElementUp(props.selectedIndex)
+      }
+    }
+
+    // 处理向下移动快捷键
+    const handleMoveDown = () => {
+      if (props.selectedIndex !== null && props.selectedIndex < props.elements.length - 1) {
+        moveElementDown(props.selectedIndex)
+      }
+    }
+
+    // 注册键盘快捷键
+    keyboardManager.register('arrowup', handleMoveUp)
+    keyboardManager.register('shift+up', handleMoveUp)
+    keyboardManager.register('arrowdown', handleMoveDown)
+    keyboardManager.register('shift+down', handleMoveDown)
+  }
+
+// 在组件挂载时注册键盘快捷键
+onMounted(() => {
+  handleKeyboardShortcuts()
+})
+
+// 在组件卸载时清理键盘快捷键
+onUnmounted(() => {
+  keyboardManager.unregister('arrowup')
+  keyboardManager.unregister('shift+up')
+  keyboardManager.unregister('arrowdown')
+  keyboardManager.unregister('shift+down')
+})
 
 // 向下移动元素
 const moveElementDown = async (index: number) => {
@@ -369,11 +440,23 @@ const moveElementDown = async (index: number) => {
 
       .draggable-item {
         position: relative;
+        cursor: move;
+        transition: all 0.2s ease;
 
         &:hover {
           .move-controls {
             display: flex;
           }
+        }
+
+        &.dragging {
+          opacity: 0.5;
+          border: 2px dashed #409eff;
+        }
+
+        &.drag-over {
+          border: 2px solid #409eff;
+          background-color: #ecf5ff;
         }
 
         .move-controls {

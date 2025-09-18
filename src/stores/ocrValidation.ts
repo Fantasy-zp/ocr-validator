@@ -712,6 +712,11 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
       // 自动保存数据
       await saveToLocalStorage();
 
+      // 强制响应式更新，确保所有组件都能正确响应顺序变化
+      if (currentSample.value.layout_dets.length > 0) {
+        currentSample.value.layout_dets = [...currentSample.value.layout_dets];
+      }
+
       return true
     } catch (error) {
       console.error('更新元素失败:', error)
@@ -861,6 +866,10 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
         // 应用新顺序
         const reorderedElements = newOrder.map(idx => currentSample.value.layout_dets[idx])
+        // 更新每个元素的order属性，保持数据一致性
+        reorderedElements.forEach((elem, i) => {
+          elem.order = i
+        })
         currentSample.value.layout_dets = reorderedElements
       } else {
         // 按order属性排序（无参数调用时的默认行为）
@@ -882,6 +891,11 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
 
       // 自动保存数据
       await saveToLocalStorage()
+
+      // 强制响应式更新，确保所有组件都能正确响应顺序变化
+      if (currentSample.value.layout_dets.length > 0) {
+        currentSample.value.layout_dets = [...currentSample.value.layout_dets];
+      }
 
       return true
     } catch (error) {

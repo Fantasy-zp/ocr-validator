@@ -58,7 +58,7 @@
             <g>
               <!-- 不再对SVG内容应用旋转变换，边界框将保持在原始位置 -->
               <g>
-                <g v-for="(elem, idx) in elements" :key="idx">
+                <g v-for="(elem, idx) in elements" :key="`elem-${idx}-${elem.order}`">
                   <!-- 计算旋转后的坐标 - 使用原始坐标，让SVG的transform属性处理旋转 -->
                   <rect
                     :x="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale"
@@ -539,6 +539,20 @@ watch(() => ocrStore.pdfDirectoryHandle, async (newHandle) => {
     await loadPDF();
   }
 })
+
+// 监听元素顺序变化，确保顺序变化时正确重渲染
+watch(() => props.elements, (newElements, oldElements) => {
+  // 检测顺序是否发生变化
+  if (newElements.length === oldElements.length) {
+    const orderChanged = !newElements.every((elem, index) => elem === oldElements[index]);
+    if (orderChanged && canvasRef.value) {
+      // 强制重渲染以确保正确显示新顺序
+      requestAnimationFrame(() => {
+        renderPage();
+      });
+    }
+  }
+}, { deep: true });
 
 onMounted(() => {
   if (props.pdfName) {
