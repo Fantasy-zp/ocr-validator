@@ -30,15 +30,37 @@
 
       <!-- 普通列表（元素少于100个） -->
       <div v-else class="normal-list">
-        <div v-for="(elem, idx) in elements" :key="idx" class="draggable-item" :draggable="true"
-          @dragstart="handleDragStart(idx)" @dragover.prevent="handleDragOver(idx)" @drop="handleDrop(idx)">
-          <OCRElementCard :element="elem" :index="idx" :view-mode="viewMode" :is-selected="selectedIndex === idx"
-            @click="handleElementClick(idx)" @edit="handleElementEdit(idx, $event)"
-            @delete="handleElementDelete(idx)" />
+        <div
+          v-for="(elem, idx) in elements"
+          :key="idx"
+          class="draggable-item"
+          :draggable="true"
+          @dragstart="handleDragStart(idx)"
+          @dragover.prevent="handleDragOver(idx)"
+          @drop="handleDrop(idx)"
+        >
+          <OCRElementCard
+            :element="elem"
+            :index="idx"
+            :view-mode="viewMode"
+            :is-selected="selectedIndex === idx"
+            @click="handleElementClick(idx)"
+            @edit="handleElementEdit(idx, $event)"
+            @delete="handleElementDelete(idx)"
+          />
           <div class="move-controls">
-            <el-button icon="el-icon-top" size="small" @click.stop="moveElementUp(idx)" :disabled="idx === 0" />
-            <el-button icon="el-icon-bottom" size="small" @click.stop="moveElementDown(idx)"
-              :disabled="idx === elements.length - 1" />
+            <el-button
+              icon="el-icon-top"
+              size="small"
+              @click.stop="moveElementUp(idx)"
+              :disabled="idx === 0"
+            />
+            <el-button
+              icon="el-icon-bottom"
+              size="small"
+              @click.stop="moveElementDown(idx)"
+              :disabled="idx === elements.length - 1"
+            />
           </div>
         </div>
       </div>

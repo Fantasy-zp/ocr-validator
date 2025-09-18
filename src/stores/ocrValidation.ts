@@ -577,9 +577,11 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
   // ===== 元素操作 =====
 
   /**
-   * 更新元素 - 增强错误处理和类型检查版本，修复order属性更新bug
+   * 更新元素 - 完全重写的健壮版本，解决所有order属性相关问题
    */
   async function updateElement(index: number, updates: Partial<LayoutElement>) {
+    console.log('索引:', index)
+
     if (!currentSample.value || index < 0 || index >= currentSample.value.layout_dets.length) {
       return false
     }
@@ -591,29 +593,124 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
         return false
       }
 
-      const oldElement = DataUtils.deepClone(currentSample.value.layout_dets[index])
-      const newElement = { ...oldElement, ...updates }
+      // 创建所有元素的深拷贝，避免直接修改原数组
+      const originalElements = DataUtils.deepClone(currentSample.value.layout_dets);
+      const oldElement = originalElements[index];
 
-      // 记录编辑历史
-      addToHistory({
-        type: 'modify',
-        elementIndex: index,
-        oldValue: oldElement,
-        newValue: newElement,
-        timestamp: Date.now()
-      })
-
-      // 更新元素
-      currentSample.value.layout_dets[index] = newElement
-      modifiedSamples.value.add(currentIndex.value)
-
-      // 如果更新了order属性，触发重新排序以确保order值唯一且连续
-      if ('order' in updates) {
-        await reorderElements()
+      // 特殊处理order属性更新
+      if ('order' in updates && typeof updates.order === 'number') {
+        console.log('执行order属性更新逻辑，目标order值:', updates.order);
+        
+        // 确保所有元素都有有效的order值
+        originalElements.forEach((elem, idx) => {
+          if (elem.order === undefined) {
+            elem.order = idx;
+            console.log(`元素${idx}的order值未定义，已初始化为${idx}`);
+          }
+        });
+        
+        // 保存原始元素order值
+        const originalElementOrder = oldElement.order;
+        
+        // 计算有效的新order值（确保在有效范围内）
+        const targetOrder = Math.max(0, Math.min(Math.floor(updates.order), originalElements.length - 1));
+        
+        console.log(`元素${index}原始order: ${originalElementOrder}，目标order: ${targetOrder}`);
+        
+        // 如果order值没有变化，仅更新当前元素的属性
+        if (originalElementOrder === targetOrder) {
+          console.log('order值未变化，仅更新元素属性');
+          const newElement = { ...oldElement, ...updates };
+          currentSample.value.layout_dets[index] = newElement;
+          
+          // 记录编辑历史
+          addToHistory({
+            type: 'modify',
+            elementIndex: index,
+            oldValue: oldElement,
+            newValue: newElement,
+            timestamp: Date.now()
+          });
+        } else {
+          console.log('执行元素顺序调整');
+          // 创建一个新的元素数组，用于重新排序
+          const newElementsArray = [...originalElements];
+          
+          // 从新数组中移除要移动的元素
+          const elementToMove = newElementsArray.splice(index, 1)[0];
+          
+          // 应用所有更新到要移动的元素
+          const updatedElement = { ...elementToMove, ...updates };
+          
+          // 在新位置插入元素
+          newElementsArray.splice(targetOrder, 0, updatedElement);
+          
+          // 关键改进：根据数组中的实际位置重新分配所有元素的order值
+          // 这确保了order值始终与数组索引完全对应
+          const finalElements = newElementsArray.map((elem, idx) => ({
+            ...elem,
+            order: idx
+          }));
+          
+          console.log('重新分配order值后的元素列表:', finalElements);
+          
+          // 保存更新前的完整状态用于历史记录
+          const oldState = DataUtils.deepClone(originalElements);
+          
+          // 更新原始数组的元素
+          currentSample.value.layout_dets = finalElements;
+          
+          // 更新选中元素索引（如果需要）
+          if (selectedElementIndex.value !== null) {
+            // 查找原选中元素在新数组中的位置
+            if (selectedElementIndex.value === index) {
+              // 如果选中的是当前正在移动的元素，则更新索引到新位置
+              selectedElementIndex.value = targetOrder;
+            } else if (originalElementOrder < targetOrder && 
+                      selectedElementIndex.value > originalElementOrder && 
+                      selectedElementIndex.value <= targetOrder) {
+              // 如果选中的元素在移动路径上（向后移动的情况），则索引减1
+              selectedElementIndex.value--;
+            } else if (originalElementOrder > targetOrder && 
+                      selectedElementIndex.value >= targetOrder && 
+                      selectedElementIndex.value < originalElementOrder) {
+              // 如果选中的元素在移动路径上（向前移动的情况），则索引加1
+              selectedElementIndex.value++;
+            }
+          }
+          
+          // 记录编辑历史 - 作为整体重排序操作
+          addToHistory({
+            type: 'reorder',
+            oldValue: oldState,
+            newValue: DataUtils.deepClone(finalElements),
+            timestamp: Date.now()
+          });
+        }
+      } else {
+        // 非order属性更新的情况
+        const newElement = { ...oldElement, ...updates };
+        currentSample.value.layout_dets[index] = newElement;
+        
+        // 强制响应式更新
+        if (currentSample.value.layout_dets.length > 0) {
+          currentSample.value.layout_dets = [...currentSample.value.layout_dets];
+        }
+        
+        // 记录编辑历史
+        addToHistory({
+          type: 'modify',
+          elementIndex: index,
+          oldValue: oldElement,
+          newValue: newElement,
+          timestamp: Date.now()
+        });
       }
-
+      
+      modifiedSamples.value.add(currentIndex.value);
+      console.log('更新后:', currentSample.value.layout_dets[index]);
       // 自动保存数据
-      await saveToLocalStorage()
+      await saveToLocalStorage();
 
       return true
     } catch (error) {
@@ -800,7 +897,7 @@ export const useOCRValidationStore = defineStore('ocrValidation', () => {
    */
   function addToHistory(action: EditAction) {
     const history = currentHistory.value
-    
+
     // 如果不在历史记录的最后，删除后面的历史
     if (history.index < history.history.length - 1) {
       history.history.splice(history.index + 1)

@@ -22,6 +22,10 @@
         <el-button @click="selectPDFFolder" :icon="FolderOpened">
           选择PDF文件夹
         </el-button>
+
+        <el-button @click="clearLocalData" :icon="Delete" type="danger" v-if="ocrStore.hasData">
+          清除本地数据
+        </el-button>
       </template>
     </UniversalHeader>
 
@@ -29,9 +33,10 @@
       <div v-if="ocrStore.hasData" class="content-wrapper">
         <!-- 左侧PDF查看器 -->
         <div class="pdf-panel" :style="{ width: pdfPanelWidth }">
-            <ImprovedPDFViewer :pdf-name="ocrStore.currentSample?.pdf_name" :elements="ocrStore.currentElements"
-              :selected-index="ocrStore.selectedElementIndex" @element-click="ocrStore.selectElement"
-              :enable-dragging="enableDragging" @update-element="handleUpdateElement" @toggle-dragging="toggleDraggingMode" />
+          <ImprovedPDFViewer :pdf-name="ocrStore.currentSample?.pdf_name" :elements="ocrStore.currentElements"
+            :selected-index="ocrStore.selectedElementIndex" @element-click="ocrStore.selectElement"
+            :enable-dragging="enableDragging" @update-element="handleUpdateElement"
+            @toggle-dragging="toggleDraggingMode" />
         </div>
 
         <!-- 可拖动分隔条 -->
@@ -39,7 +44,8 @@
 
         <!-- 右侧内容展示 -->
         <div class="content-panel">
-          <OCRContentPanel :elements="ocrStore.currentElements" :view-mode="ocrStore.viewMode === 'json' ? 'edit' : 'preview'"
+          <OCRContentPanel :elements="ocrStore.currentElements"
+            :view-mode="ocrStore.viewMode === 'json' ? 'edit' : 'preview'"
             :selected-index="ocrStore.selectedElementIndex" :page-info="ocrStore.currentSample?.page_info || null"
             @update:view-mode="ocrStore.setViewMode" @element-click="ocrStore.selectElement"
             @element-edit="handleElementEdit" @element-delete="handleElementDelete" />
@@ -77,6 +83,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   DocumentAdd,
+  Delete,
   FolderOpened,
   HomeFilled,
   UploadFilled
@@ -182,13 +189,11 @@ const handleJSONLUpload = async (file: File) => {
 
       if (result.errors.length > 0) {
         // 构建详细错误信息，包含具体行数
-        const detailedErrors = result.errors.map((err) => 
-          `第${err.line}行: ${err.error instanceof Error ? err.error.message : String(err.error)}`
+        const detailedErrors = result.errors.map((err) =>          `第${err.line}行: ${err.error instanceof Error ? err.error.message : String(err.error)}`
         ).join('\n')
-        
-        console.warn('部分数据解析失败:\n', detailedErrors)
-        
-        // 显示包含失败行数的提示
+
+console.warn('部分数据解析失败:\n', detailedErrors)
+
         if (result.errors.length <= 5) {
           // 失败行数较少时，直接显示行数
           const errorLines = result.errors.map(err => err.line).join(', ')
@@ -207,6 +212,29 @@ const handleJSONLUpload = async (file: File) => {
     ElMessage.error('文件处理失败: ' + message)
   }
   return false
+}
+
+// 清除本地数据
+const clearLocalData = () => {
+  ElMessageBox.confirm(
+    '确定要清除所有本地数据吗？此操作不可恢复！',
+    '清除确认',
+    {
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+      type: 'danger'
+    }
+  ).then(async () => {
+    try {
+      ocrStore.clearLocalStorage()
+      await ocrStore.loadFromLocalStorage() // 重新加载以清空当前状态
+      ElMessage.success('本地数据已成功清除')
+      // 可选：刷新页面以确保完全重置
+      // location.reload()
+    } catch (error) {
+      ElMessage.error('清除本地数据失败：' + error)
+    }
+  }).catch(() => { })
 }
 
 // 处理PDF上传
@@ -237,7 +265,7 @@ const handleElementEdit = (index: number, element: Partial<LayoutElement>) => {
 // 处理通过拖拽更新元素
 const handleUpdateElement = (index: number, updates: Partial<LayoutElement>) => {
   ocrStore.updateElement(index, updates)
-  
+
   // 提供操作反馈
   ElMessage.success('坐标已更新')
 }
@@ -245,7 +273,7 @@ const handleUpdateElement = (index: number, updates: Partial<LayoutElement>) => 
 // 切换拖拽模式
 const toggleDraggingMode = () => {
   enableDragging.value = !enableDragging.value
-  
+
   if (enableDragging.value) {
     ElMessage.info('进入拖拽模式：点击选中元素后，可通过拖拽边界框或调整手柄来修改坐标')
   }
@@ -304,13 +332,13 @@ const startResizing = (e: MouseEvent) => {
 // 处理鼠标移动
 const handleMouseMove = (e: MouseEvent) => {
   if (!isResizing.value) return
-  
+
   const container = document.querySelector('.content-wrapper') as HTMLElement
   if (!container) return
-  
+
   const containerRect = container.getBoundingClientRect()
   const newWidth = (e.clientX - containerRect.left) / containerRect.width * 100
-  
+
   // 限制最小和最大宽度
   const clampedWidth = Math.max(30, Math.min(70, newWidth))
   pdfPanelWidth.value = `${clampedWidth}%`
@@ -319,7 +347,7 @@ const handleMouseMove = (e: MouseEvent) => {
 // 停止拖动
 const stopResizing = () => {
   if (!isResizing.value) return
-  
+
   isResizing.value = false
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
@@ -329,7 +357,7 @@ onMounted(async () => {
   setupKeyboardShortcuts()
   // 从本地存储加载数据，确保页面刷新后能恢复状态
   await ocrStore.loadFromLocalStorage()
-  
+
   // 添加全局鼠标事件监听器
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', stopResizing)
@@ -337,7 +365,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   cleanupKeyboardShortcuts()
-  
+
   // 移除全局鼠标事件监听器
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', stopResizing)
@@ -373,7 +401,7 @@ onUnmounted(() => {
     min-width: 300px;
     max-width: calc(100% - 300px);
   }
-  
+
   .mode-controls {
     padding: 10px;
     background: #f5f7fa;

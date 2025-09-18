@@ -80,10 +80,22 @@
                   <!-- 当元素被选中且开启拖拽模式时，显示调整手柄 -->
                   <g v-if="props.enableDragging && selectedIndex === idx && !isDragging">
                     <!-- 四个角落的调整手柄 -->
-                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale : elem.poly[1] * scale" r="5" class="resize-handle nw" @mousedown="handleResizeMouseDown($event, idx, 'nw')" />
-                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[2] * scale : elem.poly[2] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale : elem.poly[1] * scale" r="5" class="resize-handle ne" @mousedown="handleResizeMouseDown($event, idx, 'ne')" />
-                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[2] * scale : elem.poly[2] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[3] * scale : elem.poly[3] * scale" r="5" class="resize-handle se" @mousedown="handleResizeMouseDown($event, idx, 'se')" />
-                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[3] * scale : elem.poly[3] * scale" r="5" class="resize-handle sw" @mousedown="handleResizeMouseDown($event, idx, 'sw')" />
+                    <circle
+                      :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale"
+                      :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale : elem.poly[1] * scale"
+                      r="5" class="resize-handle nw" @mousedown="handleResizeMouseDown($event, idx, 'nw')" />
+                    <circle
+                      :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[2] * scale : elem.poly[2] * scale"
+                      :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale : elem.poly[1] * scale"
+                      r="5" class="resize-handle ne" @mousedown="handleResizeMouseDown($event, idx, 'ne')" />
+                    <circle
+                      :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[2] * scale : elem.poly[2] * scale"
+                      :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[3] * scale : elem.poly[3] * scale"
+                      r="5" class="resize-handle se" @mousedown="handleResizeMouseDown($event, idx, 'se')" />
+                    <circle
+                      :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale"
+                      :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[3] * scale : elem.poly[3] * scale"
+                      r="5" class="resize-handle sw" @mousedown="handleResizeMouseDown($event, idx, 'sw')" />
                   </g>
                 </g>
 
