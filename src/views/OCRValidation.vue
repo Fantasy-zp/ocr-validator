@@ -29,8 +29,9 @@
       <div v-if="ocrStore.hasData" class="content-wrapper">
         <!-- 左侧PDF查看器 -->
         <div class="pdf-panel">
-          <ImprovedPDFViewer :pdf-name="ocrStore.currentSample?.pdf_name" :elements="ocrStore.currentElements"
-            :selected-index="ocrStore.selectedElementIndex" @element-click="ocrStore.selectElement" />
+            <ImprovedPDFViewer :pdf-name="ocrStore.currentSample?.pdf_name" :elements="ocrStore.currentElements"
+              :selected-index="ocrStore.selectedElementIndex" @element-click="ocrStore.selectElement"
+              :enable-dragging="enableDragging" @update-element="handleUpdateElement" @toggle-dragging="toggleDraggingMode" />
         </div>
 
         <!-- 右侧内容展示 -->
@@ -69,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   DocumentAdd,
@@ -86,6 +87,9 @@ import OCRContentPanel from '@/components/ocr/OCRContentPanel.vue'
 import OCREditor from '@/components/ocr/OCREditor.vue'
 
 const ocrStore = useOCRValidationStore()
+
+// 拖拽模式状态
+const enableDragging = ref(false)
 
 // 计算PDF统计信息
 const pdfStatsText = computed(() => {
@@ -222,6 +226,23 @@ const handleElementEdit = (index: number, element: Partial<LayoutElement>) => {
   ElMessage.success('元素已更新')
 }
 
+// 处理通过拖拽更新元素
+const handleUpdateElement = (index: number, updates: Partial<LayoutElement>) => {
+  ocrStore.updateElement(index, updates)
+  
+  // 提供操作反馈
+  ElMessage.success('坐标已更新')
+}
+
+// 切换拖拽模式
+const toggleDraggingMode = () => {
+  enableDragging.value = !enableDragging.value
+  
+  if (enableDragging.value) {
+    ElMessage.info('进入拖拽模式：点击选中元素后，可通过拖拽边界框或调整手柄来修改坐标')
+  }
+}
+
 // 处理元素删除
 const handleElementDelete = (index: number) => {
   ElMessageBox.confirm(
@@ -297,9 +318,19 @@ onUnmounted(() => {
 
   .pdf-panel {
     flex: 1;
-    min-width: 0;
     background: white;
     border-right: 1px solid #e4e7ed;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .mode-controls {
+    padding: 10px;
+    background: #f5f7fa;
+    border-top: 1px solid #e4e7ed;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .content-panel {

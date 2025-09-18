@@ -13,6 +13,30 @@
 
       <el-checkbox v-model="showBoundingBoxes">显示边框</el-checkbox>
       <el-checkbox v-model="showLabels">显示标签</el-checkbox>
+
+      <!-- PDF旋转按钮 -->
+      <el-button-group style="margin-left: 10px;">
+        <el-tooltip content="顺时针旋转90度">
+          <el-button @click="rotatePDFClockwise" :icon="Refresh" size="small" class="rotate-btn-clockwise" />
+        </el-tooltip>
+        <el-tooltip content="逆时针旋转90度">
+          <el-button @click="rotatePDFCounterClockwise" :icon="Refresh" size="small"
+            class="rotate-btn-counterclockwise" />
+        </el-tooltip>
+      </el-button-group>
+
+      <!-- 拖拽模式按钮 -->
+      <el-button :type="props.enableDragging ? 'primary' : ''" size="small" @click="$emit('toggle-dragging')"
+        style="margin-left: 10px;">
+        {{ props.enableDragging ? '退出拖拽模式' : '进入拖拽模式' }}
+      </el-button>
+
+      <el-tooltip v-if="props.enableDragging" content="拖拽模式下，可通过拖拽边界框或调整手柄来精确修改元素坐标">
+        <el-tag size="small" type="info" style="margin-left: 10px;">
+          拖拽模式
+        </el-tag>
+      </el-tooltip>
+
       <el-tag v-if="pdfName" type="info" class="pdf-name-tag">
         {{ pdfName }}
       </el-tag>
@@ -38,17 +62,41 @@
 
         <!-- 边界框层 -->
         <div v-if="showBoundingBoxes && elements.length > 0">
+          <!-- 注意：canvas已经被PDF.js旋转，所以我们需要在SVG上应用相反的旋转来保持边界框与内容对齐 -->
           <svg class="bbox-overlay" :style="overlayStyle">
-            <rect v-for="(elem, idx) in elements" :key="idx" :x="elem.poly[0] * scale" :y="elem.poly[1] * scale"
-              :width="(elem.poly[2] - elem.poly[0]) * scale" :height="(elem.poly[3] - elem.poly[1]) * scale"
-              :class="getBBoxClass(elem.category_type, idx)" :opacity="selectedIndex === idx ? 1 : 0.3"
-              @click="$emit('element-click', idx)" />
+            <g>
+              <!-- 不再对SVG内容应用旋转变换，边界框将保持在原始位置 -->
+              <g>
+                <g v-for="(elem, idx) in elements" :key="idx">
+                  <!-- 计算旋转后的坐标 - 使用原始坐标，让SVG的transform属性处理旋转 -->
+                  <rect
+                    :x="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale"
+                    :y="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale : elem.poly[1] * scale"
+                    :width="((tempEditedPoly && draggedElementIndex === idx) ? (tempEditedPoly[2] - tempEditedPoly[0]) : (elem.poly[2] - elem.poly[0])) * scale"
+                    :height="((tempEditedPoly && draggedElementIndex === idx) ? (tempEditedPoly[3] - tempEditedPoly[1]) : (elem.poly[3] - elem.poly[1])) * scale"
+                    :class="getBBoxClass(elem.category_type, idx)" :opacity="selectedIndex === idx ? 1 : 0.3"
+                    @click="handleElementClick($event, idx)" @mousedown="handleBBoxMouseDown($event, idx)" />
 
-            <g v-if="showLabels">
-              <text v-for="(elem, idx) in elements" :key="`label-${idx}`" :x="elem.poly[0] * scale + 2"
-                :y="elem.poly[1] * scale + 12" class="bbox-label" :opacity="selectedIndex === idx ? 1 : 0.7">
-                [{{ idx }}] {{ elem.category_type }}
-              </text>
+                  <!-- 当元素被选中且开启拖拽模式时，显示调整手柄 -->
+                  <g v-if="props.enableDragging && selectedIndex === idx && !isDragging">
+                    <!-- 四个角落的调整手柄 -->
+                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale : elem.poly[1] * scale" r="5" class="resize-handle nw" @mousedown="handleResizeMouseDown($event, idx, 'nw')" />
+                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[2] * scale : elem.poly[2] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale : elem.poly[1] * scale" r="5" class="resize-handle ne" @mousedown="handleResizeMouseDown($event, idx, 'ne')" />
+                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[2] * scale : elem.poly[2] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[3] * scale : elem.poly[3] * scale" r="5" class="resize-handle se" @mousedown="handleResizeMouseDown($event, idx, 'se')" />
+                    <circle :cx="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale : elem.poly[0] * scale" :cy="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[3] * scale : elem.poly[3] * scale" r="5" class="resize-handle sw" @mousedown="handleResizeMouseDown($event, idx, 'sw')" />
+                  </g>
+                </g>
+
+                <!-- 标签文本 -->
+                <g v-if="showLabels">
+                  <text v-for="(elem, idx) in elements" :key="`label-${idx}`"
+                    :x="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[0] * scale + 2 : elem.poly[0] * scale + 2"
+                    :y="(tempEditedPoly && draggedElementIndex === idx) ? tempEditedPoly[1] * scale + 12 : elem.poly[1] * scale + 12"
+                    class="bbox-label" :opacity="selectedIndex === idx ? 1 : 0.7">
+                    [{{ idx }}] {{ elem.category_type }}
+                  </text>
+                </g>
+              </g>
             </g>
           </svg>
         </div>
@@ -59,27 +107,34 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { ZoomIn, ZoomOut, Loading } from '@element-plus/icons-vue'
-import { useOCRValidationStore } from '@/stores/ocrValidation'
-import type { LayoutElement } from '@/types'
-import type { CSSProperties } from 'vue'
+import { ElMessage } from 'element-plus'
+import { ZoomIn, ZoomOut, Loading, Refresh } from '@element-plus/icons-vue'
 import * as pdfjsLib from 'pdfjs-dist'
+import type { LayoutElement } from '@/types'
+import { useOCRValidationStore } from '@/stores/ocrValidation'
+import type { CSSProperties } from 'vue'
 
-// 设置 worker
+// 设置 PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.js',
   import.meta.url
 ).toString()
 
+// Props
 interface Props {
-  pdfName?: string
+  pdfName: string | null | undefined
   elements: LayoutElement[]
   selectedIndex: number | null
+  enableDragging: boolean
 }
 
 const props = defineProps<Props>()
-defineEmits<{
+
+// Emits
+const emit = defineEmits<{
   'element-click': [index: number]
+  'update-element': [index: number, updates: Partial<LayoutElement>]
+  'toggle-dragging': []
 }>()
 
 const ocrStore = useOCRValidationStore()
@@ -93,14 +148,27 @@ const scale = ref(1)
 const showBoundingBoxes = ref(true)
 const showLabels = ref(true)
 
+// 拖拽相关状态
+const isDragging = ref(false)
+const dragType = ref<'move' | 'resize-nw' | 'resize-ne' | 'resize-se' | 'resize-sw' | null>(null)
+const dragStartPos = ref({ x: 0, y: 0 })
+const dragStartPoly = ref<number[]>([])
+const tempEditedPoly = ref<number[] | null>(null)
+const draggedElementIndex = ref<number | null>(null)
+
 // PDF相关 - 不使用响应式
 let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null
 let pageObj: pdfjsLib.PDFPageProxy | null = null
 let renderTaskObj: pdfjsLib.RenderTask | null = null
 
+
+
 // 页面尺寸
 const pageWidth = ref(0)
 const pageHeight = ref(0)
+// 原始页面尺寸（不考虑旋转）
+const originalPageWidth = ref(0)
+const originalPageHeight = ref(0)
 
 // 计算样式
 const canvasContainerStyle = computed<CSSProperties>(() => ({
@@ -118,6 +186,8 @@ const overlayStyle = computed<CSSProperties>(() => ({
   pointerEvents: 'all' as const
 }))
 
+// 计算属性
+
 // 获取边界框CSS类
 const getBBoxClass = (type: string, index: number) => {
   // 规范化类型名称，确保它是有效的CSS类名
@@ -127,6 +197,134 @@ const getBBoxClass = (type: string, index: number) => {
     classes.push('bbox-selected')
   }
   return classes.join(' ')
+}
+
+// 处理元素点击事件
+const handleElementClick = (event: MouseEvent, index: number) => {
+  const containerRect = containerRef.value!.getBoundingClientRect()
+  const x = event.clientX - containerRect.left
+  const y = event.clientY - containerRect.top
+
+  const elem = props.elements[index]
+  const x1 = (tempEditedPoly.value && draggedElementIndex.value === index) ? tempEditedPoly.value[0] * scale.value : elem.poly[0] * scale.value
+  const y1 = (tempEditedPoly.value && draggedElementIndex.value === index) ? tempEditedPoly.value[1] * scale.value : elem.poly[1] * scale.value
+  const x2 = (tempEditedPoly.value && draggedElementIndex.value === index) ? tempEditedPoly.value[2] * scale.value : elem.poly[2] * scale.value
+  const y2 = (tempEditedPoly.value && draggedElementIndex.value === index) ? tempEditedPoly.value[3] * scale.value : elem.poly[3] * scale.value
+
+  if (x >= x1 && x <= x2 && y >= y1 && y <= y2) {
+    emit('element-click', index)
+  }
+}
+
+// 拖拽事件处理
+const handleBBoxMouseDown = (event: MouseEvent, index: number) => {
+  if (!props.enableDragging) {
+    return
+  }
+
+  event.stopPropagation()
+  startDragging(event, index, 'move')
+}
+
+const handleResizeMouseDown = (event: MouseEvent, index: number, type: string) => {
+  event.stopPropagation()
+  startDragging(event, index, `resize-${type}`)
+}
+
+const startDragging = (event: MouseEvent, index: number, type: string) => {
+  isDragging.value = true
+  dragType.value = type === 'move' ? 'move' : `resize-${type.split('-')[1]}` as 'resize-nw' | 'resize-ne' | 'resize-se' | 'resize-sw'
+  draggedElementIndex.value = index
+
+  dragStartPos.value = { x: event.clientX, y: event.clientY }
+  dragStartPoly.value = [...props.elements[index].poly]
+  tempEditedPoly.value = [...props.elements[index].poly]
+
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
+
+  // 防止文本选择
+  document.body.style.userSelect = 'none'
+}
+
+const handleMouseMove = (event: MouseEvent) => {
+  if (!isDragging.value || draggedElementIndex.value === null || !tempEditedPoly.value) {
+    return
+  }
+
+  // 计算相对于拖拽起始点的偏移
+  const dx = event.clientX - dragStartPos.value.x
+  const dy = event.clientY - dragStartPos.value.y
+
+  // 复制原始拖拽起始坐标
+  const newPoly = [...dragStartPoly.value]
+
+  // 根据拖拽类型计算新的坐标
+  if (dragType.value === 'move') {
+    // 标准移动逻辑
+    newPoly[0] += dx / scale.value
+    newPoly[1] += dy / scale.value
+    newPoly[2] += dx / scale.value
+    newPoly[3] += dy / scale.value
+  } else if (!rotationAngle.value) {
+    // 只有在未旋转状态下才允许调整大小，旋转状态下禁用此功能
+    // 调整边界框大小
+    switch (dragType.value) {
+      case 'resize-nw':
+        newPoly[0] += dx / scale.value
+        newPoly[1] += dy / scale.value
+        break
+      case 'resize-ne':
+        newPoly[2] += dx / scale.value
+        newPoly[1] += dy / scale.value
+        break
+      case 'resize-se':
+        newPoly[2] += dx / scale.value
+        newPoly[3] += dy / scale.value
+        break
+      case 'resize-sw':
+        newPoly[0] += dx / scale.value
+        newPoly[3] += dy / scale.value
+        break
+    }
+  }
+
+  // 确保坐标有效（x1 < x2, y1 < y2）
+  if (newPoly[0] > newPoly[2]) {
+    [newPoly[0], newPoly[2]] = [newPoly[2], newPoly[0]]
+  }
+  if (newPoly[1] > newPoly[3]) {
+    [newPoly[1], newPoly[3]] = [newPoly[3], newPoly[1]]
+  }
+
+  // 确保坐标不小于0
+  newPoly[0] = Math.max(0, newPoly[0])
+  newPoly[1] = Math.max(0, newPoly[1])
+  newPoly[2] = Math.max(0, newPoly[2])
+  newPoly[3] = Math.max(0, newPoly[3])
+
+  // 实时更新显示
+  tempEditedPoly.value = newPoly
+}
+
+const handleMouseUp = () => {
+  if (isDragging.value && draggedElementIndex.value !== null && tempEditedPoly.value) {
+    // 保存调整后的坐标到store，并将坐标值四舍五入为整数
+    const updatedPoly = tempEditedPoly.value.map(val => Math.round(val)) as [number, number, number, number]
+    emit('update-element', draggedElementIndex.value, { poly: updatedPoly })
+  }
+
+  // 重置拖拽状态
+  isDragging.value = false
+  dragType.value = null
+  draggedElementIndex.value = null
+  tempEditedPoly.value = null
+
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', handleMouseUp)
+
+  // 恢复文本选择
+  document.body.style.userSelect = ''
 }
 
 // 重试计时器引用
@@ -234,15 +432,24 @@ const renderPage = async () => {
     if (!ctx) return
 
     // 获取视口
-    const viewport = pageObj.getViewport({ scale: scale.value })
+    const viewport = pageObj.getViewport({
+      scale: scale.value,
+      rotation: rotationAngle.value
+    })
 
     // 设置canvas尺寸
     canvas.width = viewport.width
     canvas.height = viewport.height
 
-    // 更新页面尺寸
+    // 更新页面尺寸（考虑旋转后的实际尺寸）
     pageWidth.value = viewport.width / scale.value
     pageHeight.value = viewport.height / scale.value
+
+    // 如果是第一次渲染，保存原始页面尺寸
+    if (originalPageWidth.value === 0 && originalPageHeight.value === 0) {
+      originalPageWidth.value = viewport.width / scale.value
+      originalPageHeight.value = viewport.height / scale.value
+    }
 
     // 渲染
     const renderContext = {
@@ -260,6 +467,23 @@ const renderPage = async () => {
       error.value = `渲染失败: ${err.message}`
     }
   }
+}
+
+// PDF旋转角度 (0, 90, 180, 270)
+const rotationAngle = ref(0)
+
+// 顺时针旋转90度
+const rotatePDFClockwise = () => {
+  rotationAngle.value = (rotationAngle.value + 90) % 360
+  renderPage()
+  ElMessage.success('PDF已顺时针旋转90度')
+}
+
+// 逆时针旋转90度
+const rotatePDFCounterClockwise = () => {
+  rotationAngle.value = (rotationAngle.value - 90 + 360) % 360
+  renderPage()
+  ElMessage.success('PDF已逆时针旋转90度')
 }
 
 // 缩放控制
@@ -331,6 +555,11 @@ onUnmounted(() => {
   if (pdfDoc) {
     pdfDoc.destroy()
   }
+
+  // 清理拖拽事件监听
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', handleMouseUp)
+  document.body.style.userSelect = ''
 })
 </script>
 
@@ -356,7 +585,8 @@ onUnmounted(() => {
     padding: 20px;
     background: #909399;
     display: flex;
-    justify-content: center;
+    align-items: flex-start; // 设置为flex-start而不是默认值stretch
+    // 移除了justify-content: center，允许水平滚动
 
     .loading-mask {
       display: flex;
@@ -398,6 +628,10 @@ onUnmounted(() => {
     &:hover {
       opacity: 0.8 !important;
       stroke-width: 3;
+    }
+
+    &.bbox-selected {
+      cursor: move;
     }
 
     // 标题类型 - 红色系
@@ -482,11 +716,31 @@ onUnmounted(() => {
       filter: drop-shadow(0 0 2px rgba(64, 158, 255, 0.3));
       transition: all 0.2s ease;
     }
+  }
 
-    &-selected {
-      stroke-width: 3;
-      opacity: 1 !important;
-      fill-opacity: 0.2 !important;
+  .resize-handle {
+    fill: #409eff;
+    stroke: white;
+    stroke-width: 1;
+    cursor: nwse-resize;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.3));
+    transition: all 0.2s ease;
+
+    &:hover {
+      r: 6;
+      filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.4));
+    }
+
+    &.ne {
+      cursor: nesw-resize;
+    }
+
+    &.se {
+      cursor: nwse-resize;
+    }
+
+    &.sw {
+      cursor: nesw-resize;
     }
   }
 
@@ -508,5 +762,14 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+// 表格翻转按钮样式
+.flip-btn-horizontal .el-icon {
+  transform: scaleX(1);
+}
+
+.flip-btn-vertical .el-icon {
+  transform: rotate(90deg);
 }
 </style>
