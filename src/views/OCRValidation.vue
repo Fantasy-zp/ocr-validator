@@ -28,11 +28,14 @@
     <main class="main-container">
       <div v-if="ocrStore.hasData" class="content-wrapper">
         <!-- 左侧PDF查看器 -->
-        <div class="pdf-panel">
+        <div class="pdf-panel" :style="{ width: pdfPanelWidth }">
             <ImprovedPDFViewer :pdf-name="ocrStore.currentSample?.pdf_name" :elements="ocrStore.currentElements"
               :selected-index="ocrStore.selectedElementIndex" @element-click="ocrStore.selectElement"
               :enable-dragging="enableDragging" @update-element="handleUpdateElement" @toggle-dragging="toggleDraggingMode" />
         </div>
+
+        <!-- 可拖动分隔条 -->
+        <div class="resizer" @mousedown="startResizing" ref="resizerRef"></div>
 
         <!-- 右侧内容展示 -->
         <div class="content-panel">
@@ -90,6 +93,11 @@ const ocrStore = useOCRValidationStore()
 
 // 拖拽模式状态
 const enableDragging = ref(false)
+
+// 面板宽度和拖动状态
+const pdfPanelWidth = ref('50%')
+const isResizing = ref(false)
+const resizerRef = ref<HTMLElement | null>(null)
 
 // 计算PDF统计信息
 const pdfStatsText = computed(() => {
@@ -285,14 +293,54 @@ const handleExport = () => {
   ElMessage.success(`成功导出 ${ocrStore.totalSamples} 条数据`)
 }
 
+// 开始拖动分隔条
+const startResizing = (e: MouseEvent) => {
+  e.preventDefault()
+  isResizing.value = true
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+// 处理鼠标移动
+const handleMouseMove = (e: MouseEvent) => {
+  if (!isResizing.value) return
+  
+  const container = document.querySelector('.content-wrapper') as HTMLElement
+  if (!container) return
+  
+  const containerRect = container.getBoundingClientRect()
+  const newWidth = (e.clientX - containerRect.left) / containerRect.width * 100
+  
+  // 限制最小和最大宽度
+  const clampedWidth = Math.max(30, Math.min(70, newWidth))
+  pdfPanelWidth.value = `${clampedWidth}%`
+}
+
+// 停止拖动
+const stopResizing = () => {
+  if (!isResizing.value) return
+  
+  isResizing.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
 onMounted(async () => {
   setupKeyboardShortcuts()
   // 从本地存储加载数据，确保页面刷新后能恢复状态
   await ocrStore.loadFromLocalStorage()
+  
+  // 添加全局鼠标事件监听器
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', stopResizing)
 })
 
 onUnmounted(() => {
   cleanupKeyboardShortcuts()
+  
+  // 移除全局鼠标事件监听器
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', stopResizing)
 })
 </script>
 
@@ -317,11 +365,13 @@ onUnmounted(() => {
   overflow: hidden;
 
   .pdf-panel {
-    flex: 1;
+    width: 50%;
     background: white;
     border-right: 1px solid #e4e7ed;
     display: flex;
     flex-direction: column;
+    min-width: 300px;
+    max-width: calc(100% - 300px);
   }
   
   .mode-controls {
@@ -337,6 +387,29 @@ onUnmounted(() => {
     flex: 1;
     min-width: 0;
     background: #f5f7fa;
+  }
+
+  .resizer {
+    width: 5px;
+    background-color: #dcdfe6;
+    cursor: col-resize;
+    position: relative;
+    transition: all 0.3s;
+
+    &:hover {
+      background-color: #409eff;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 1px;
+      height: 40px;
+      background-color: #c0c4cc;
+    }
   }
 }
 

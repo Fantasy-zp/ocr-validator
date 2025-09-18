@@ -384,19 +384,7 @@ const adjustInputSize = (input: HTMLInputElement, content: string) => {
   input.style.width = `${Math.max(60, Math.min(500, width))}px`
 }
 
-// 添加防抖函数
-const debounce = <T extends (...args: unknown[]) => unknown>(func: T, wait: number) => {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  return function(this: unknown, ...args: Parameters<T>) {
-    if (timeout) {
-      clearTimeout(timeout)
-    }
-    timeout = setTimeout(() => {
-      func.apply(this, args)
-      timeout = null
-    }, wait)
-  }
-}
+
 
 /**
  * 验证表格数据
@@ -1124,19 +1112,23 @@ onUnmounted(() => {
   height: 100%;
 
   .editor-toolbar {
-    padding: 10px;
-    background: #f5f7fa;
-    border: 1px solid #e4e7ed;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+      padding: 10px;
+      background: #f5f7fa;
+      border: 1px solid #e4e7ed;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 
-    .el-divider--vertical {
-      height: 20px;
+      .el-divider--vertical {
+        height: 20px;
+      }
     }
-  }
 
   .editor-content {
     flex: 1;
