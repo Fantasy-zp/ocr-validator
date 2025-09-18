@@ -159,7 +159,6 @@ import { ElMessage, ElTag, ElButton, ElSwitch, ElSelect, ElOption } from 'elemen
 import OCRElementCard from './OCRElementCard.vue'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
 import type { LayoutElement, PageInfo } from '@/types'
-import { KeyboardManager } from '@/utils/helpers'
 
 const props = defineProps<{
   elements: LayoutElement[]
@@ -186,9 +185,6 @@ const editPageInfoForm = ref<PageInfo>({
   is_diagram: props.pageInfo?.is_diagram || false
 })
 const draggedElementIndex = ref<number | null>(null)
-
-// 键盘管理器实例
-const keyboardManager = new KeyboardManager()
 
 // 虚拟滚动的列定义
 const virtualColumns = computed(() => [
@@ -354,40 +350,8 @@ const moveElementUp = async (index: number) => {
 
 // 键盘快捷键处理函数
 const handleKeyboardShortcuts = () => {
-    // 处理向上移动快捷键
-    const handleMoveUp = () => {
-      if (props.selectedIndex !== null && props.selectedIndex > 0) {
-        const currentIndex = props.selectedIndex
-        moveElementUp(currentIndex)
-        // 移动后更新选中状态（向上移动后，选中的应该是新位置的元素）
-        setTimeout(() => {
-          if (currentIndex !== null && currentIndex > 0) {
-            emit('element-click', currentIndex - 1)
-          }
-        }, 100)
-      }
-    }
-
-    // 处理向下移动快捷键
-    const handleMoveDown = () => {
-      if (props.selectedIndex !== null && props.selectedIndex < props.elements.length - 1) {
-        const currentIndex = props.selectedIndex
-        moveElementDown(currentIndex)
-        // 移动后更新选中状态（向下移动后，选中的应该是新位置的元素）
-        setTimeout(() => {
-          if (currentIndex !== null && currentIndex < props.elements.length - 1) {
-            emit('element-click', currentIndex + 1)
-          }
-        }, 100)
-      }
-    }
-
-    // 注册键盘快捷键
-    keyboardManager.register('arrowup', handleMoveUp)
-    keyboardManager.register('shift+up', handleMoveUp)
-    keyboardManager.register('arrowdown', handleMoveDown)
-    keyboardManager.register('shift+down', handleMoveDown)
-  }
+  // 向上和向下移动的快捷键已移除
+}
 
 // 在组件挂载时注册键盘快捷键
 onMounted(() => {
@@ -396,10 +360,7 @@ onMounted(() => {
 
 // 在组件卸载时清理键盘快捷键
 onUnmounted(() => {
-  keyboardManager.unregister('arrowup')
-  keyboardManager.unregister('shift+up')
-  keyboardManager.unregister('arrowdown')
-  keyboardManager.unregister('shift+down')
+  // 向上和向下移动的快捷键清理代码已移除
 })
 
 // 向下移动元素
