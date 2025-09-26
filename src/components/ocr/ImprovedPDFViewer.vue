@@ -116,11 +116,20 @@ import type { LayoutElement } from '@/types'
 import { useOCRValidationStore } from '@/stores/ocrValidation'
 import type { CSSProperties } from 'vue'
 
-// 设置 PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.js',
-  import.meta.url
-).toString()
+// 设置 PDF.js worker - 支持本地和CDN回退选项
+// 尝试使用Vite正确处理的worker路径
+let workerSrc = ''
+try {
+  // 首先尝试使用本地路径（开发环境）
+  workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString()
+} catch (error) {
+  // 如果失败，使用CDN路径作为回退（生产环境）
+  console.warn('无法设置本地PDF worker，使用CDN回退:', error)
+  // 使用与package.json中相同版本的CDN链接
+  workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+}
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc
 
 // Props
 interface Props {
